@@ -4,6 +4,12 @@ set -euo pipefail
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 remote_app="/var/www/sites/iidca-social-club/app"
 
+if [[ -n "$(git -C "$project_dir" status --porcelain)" ]]; then
+  echo "Hay cambios sin commitear. Hacé el commit antes de desplegar." >&2
+  exit 1
+fi
+git -C "$project_dir" push origin main
+
 # The remote site user can write only inside IIDCA's application directory.
 rsync -az \
   --exclude '/.git/' \
