@@ -51,9 +51,9 @@ import {
 
 const logo = "/logo-iidca.png";
 const defaultFilters = {
-  sport: testingMode ? "Fútbol" : "",
-  location: testingMode ? "Palermo" : "",
-  category: testingMode ? "CLUB" : "",
+  sport: "",
+  location: testingMode ? "Ciudad de Buenos Aires" : "",
+  category: "",
   lat: "",
   lng: "",
 };

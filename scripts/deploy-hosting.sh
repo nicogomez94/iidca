@@ -26,7 +26,7 @@ rsync -az \
 ssh hosting 'bash -se' <<'REMOTE'
 set -euo pipefail
 app=/var/www/sites/iidca-social-club/app
-runuser -u site-iidca -- sh -c "cd '$app' && npm ci && npm run db:generate && npm run db:deploy && VITE_DEBUG=false npm run build"
+runuser -u site-iidca -- sh -c "cd '$app' && npm ci && npm run db:generate && npm run db:deploy && VITE_DEBUG=false VITE_TESTING_DEFAULT=true npm run build"
 nginx -t
 systemctl restart iidca-social-club.service
 for attempt in 1 2 3 4 5 6 7 8 9 10; do

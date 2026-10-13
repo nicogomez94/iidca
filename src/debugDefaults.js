@@ -1,6 +1,8 @@
 const localDebug = import.meta.env.VITE_DEBUG === "true";
 export const testingMode =
-  localDebug || new URLSearchParams(window.location.search).get("testing") === "1";
+  localDebug ||
+  import.meta.env.VITE_TESTING_DEFAULT === "true" ||
+  new URLSearchParams(window.location.search).get("testing") === "1";
 
 const shared = {
   city: "Ciudad de Buenos Aires",
