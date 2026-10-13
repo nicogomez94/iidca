@@ -43,13 +43,17 @@ import {
   roleFields,
   roleLabels,
 } from "./data.js";
-import { registrationDefaults } from "./debugDefaults.js";
+import {
+  createLoginDefaults,
+  createRegistrationDefaults,
+  testingMode,
+} from "./debugDefaults.js";
 
 const logo = "/logo-iidca.png";
 const defaultFilters = {
-  sport: "",
-  location: "",
-  category: "",
+  sport: testingMode ? "Fútbol" : "",
+  location: testingMode ? "Palermo" : "",
+  category: testingMode ? "CLUB" : "",
   lat: "",
   lng: "",
 };
@@ -973,7 +977,9 @@ function FormField({ field, value, onChange }) {
 function AuthModal({ mode, onClose, onSuccess, onMode }) {
   const [role, setRole] = useState("ATHLETE");
   const [step, setStep] = useState(0);
-  const [draft, setDraft] = useState(registrationDefaults);
+  const [draft, setDraft] = useState(() =>
+    mode === "login" ? createLoginDefaults() : createRegistrationDefaults(),
+  );
   const [accepted, setAccepted] = useState(false);
   const [publicConsent, setPublicConsent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -1038,6 +1044,7 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
           profile,
         }),
       });
+      if (testingMode) window.sessionStorage.setItem("iidcaTestEmail", draft.email);
       onSuccess(data.user);
     } catch (issue) {
       setError(issue.message);
@@ -1072,6 +1079,11 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
               Entrá a tu <em>espacio.</em>
             </h2>
             <p>Seguimos conectando personas con oportunidades para moverse.</p>
+            {testingMode && (
+              <p className="test-mode-note">
+                Modo de prueba: ingresá con la última cuenta ficticia que registraste.
+              </p>
+            )}
             <form onSubmit={submitLogin} className="auth-form">
               <FormField
                 field={{
@@ -1134,12 +1146,20 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
                   Hay un lugar <em>para vos.</em>
                 </h2>
                 <p>Elegí cómo querés formar parte de IIDCA Social Club.</p>
+                {testingMode && (
+                  <p className="test-mode-note">
+                    Modo de prueba: los datos son ficticios y podés editarlos antes de enviar.
+                  </p>
+                )}
                 <div className="role-grid">
                   {Object.keys(roleDescriptions).map((item) => (
                     <button
                       key={item}
                       className={`role-option ${role === item ? "selected" : ""}`}
-                      onClick={() => setRole(item)}
+                      onClick={() => {
+                        setRole(item);
+                        if (testingMode) setDraft(createRegistrationDefaults(item));
+                      }}
                     >
                       <span className="role-option-icon">{roleIcon(item)}</span>
                       <strong>{roleLabels[item]}</strong>

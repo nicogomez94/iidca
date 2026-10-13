@@ -119,6 +119,15 @@ img {
 .eyebrow-blue {
   color: var(--blue);
 }
+.test-mode-note {
+  padding: 10px 13px;
+  border: 1px solid #f7d696;
+  border-radius: 5px;
+  background: #fff7e6;
+  color: #684619;
+  font-size: 13px;
+  line-height: 1.45;
+}
 .eyebrow-light {
   color: #bfc6ff;
 }

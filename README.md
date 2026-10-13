@@ -38,6 +38,8 @@ Para publicar cambios desde esta carpeta, ejecutá `bash scripts/deploy-hosting.
 
 El certificado HTTPS de la IP tiene una renovación independiente mediante `iidca-ip-cert-renew.timer`. El directorio arranca vacío en producción; las seis fichas ficticias del entorno de desarrollo no se publican. Los perfiles públicos nuevos aparecen cuando un administrador los aprueba.
 
+Para probar los formularios con datos ficticios precargados, abrí [https://149.34.224.87/?testing=1](https://149.34.224.87/?testing=1). El registro genera un email distinto cada vez y carga valores acordes al tipo de perfil; el ingreso reutiliza el email de la última cuenta de prueba creada en esa pestaña. Las confirmaciones de edad y publicación se marcan manualmente. Sin `?testing=1`, la versión pública muestra formularios vacíos.
+
 ## Notas de implementación
 
 - Los perfiles públicos nuevos requieren aprobación del administrador. Las fichas de deportistas permanecen privadas.
