@@ -9,6 +9,7 @@ if [[ -n "$(git -C "$project_dir" status --porcelain)" ]]; then
   exit 1
 fi
 git -C "$project_dir" push origin main
+git -C "$project_dir" push hosting main
 
 # The remote site user can write only inside IIDCA's application directory.
 rsync -az \
