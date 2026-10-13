@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ATHLETE
+  PROFESSIONAL
+  CLUB
+  FEDERATION
+  SPONSOR
+  ADMIN
+}
+
+enum ProfileStatus {
+  PENDING
+  PUBLISHED
+  HIDDEN
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  profile      Profile?
+}
+
+model Profile {
+  id           String        @id @default(cuid())
+  userId       String        @unique
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  category     Role
+  headline     String?
+  description  String?
+  sport        String?
+  sports       String[]
+  city         String
+  neighborhood String?
+  address      String?
+  latitude     Float?
+  longitude    Float?
+  email        String?
+  phone        String?
+  instagram    String?
+  website      String?
+  details      Json?
+  status       ProfileStatus @default(PENDING)
+  isDemo       Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([status, category])
+  @@index([city])
+  @@index([sport])
+}

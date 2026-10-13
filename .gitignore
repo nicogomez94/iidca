@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.env.local
+.DS_Store
+*.log
+*.docx
+logo IIDCA SOCIAL CLUB FINAL.png
