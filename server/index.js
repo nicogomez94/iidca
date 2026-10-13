@@ -11,6 +11,7 @@ import { PrismaClient } from "@prisma/client";
 const app = express();
 const prisma = new PrismaClient();
 const port = Number(process.env.PORT || 4000);
+const host = process.env.HOST || '127.0.0.1';
 const tokenName = "iidca_session";
 const publicRoles = ["PROFESSIONAL", "CLUB", "FEDERATION", "SPONSOR"];
 const allowedRoles = ["ATHLETE", ...publicRoles];
@@ -485,6 +486,6 @@ app.use((error, _req, res, _next) => {
   res.status(500).json({ error: "Ocurrió un error. Intentá de nuevo." });
 });
 
-app.listen(port, () =>
-  console.log(`IIDCA Social Club API: http://localhost:${port}`),
+app.listen(port, host, () =>
+  console.log(`IIDCA Social Club API: http://${host}:${port}`),
 );
