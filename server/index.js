@@ -58,6 +58,7 @@ app.use((req, res, next) => {
 });
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Demasiados intentos. Probá más tarde." } });
 const claimLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 8, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Demasiadas solicitudes. Probá más tarde." } });
+const contactLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 5, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Demasiados mensajes. Probá más tarde." } });
 
 function activeProfile(user) {
   return user.claimedProfile || user.profile;
@@ -242,6 +243,31 @@ app.get("/api/health", async (_req, res) => {
     res.json({ ok: true });
   } catch {
     res.status(503).json({ ok: false });
+  }
+});
+
+app.post("/api/contact", contactLimiter, async (req, res) => {
+  const name = cleanText(req.body.name, 120);
+  const email = cleanText(req.body.email, 200);
+  const message = cleanText(req.body.message, 3000);
+  if (req.body.company) return res.json({ success: true });
+  if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !message)
+    return res.status(400).json({ error: "Completá nombre, email válido y mensaje." });
+  if (!process.env.CONTACT_TO || !process.env.CONTACT_SITE)
+    return res.status(503).json({ error: "El contacto todavía no está configurado." });
+  try {
+    const upstream = await fetch("https://contact-form-service-e8aa.onrender.com/api/contact", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, message, to: process.env.CONTACT_TO, site: process.env.CONTACT_SITE, company: "" }),
+      signal: AbortSignal.timeout(20000),
+    });
+    const data = await upstream.json().catch(() => null);
+    if (!upstream.ok || data?.success !== true)
+      return res.status(502).json({ error: "No se pudo enviar el mensaje. Probá nuevamente." });
+    res.json({ success: true });
+  } catch {
+    res.status(502).json({ error: "No se pudo enviar el mensaje. Probá nuevamente." });
   }
 });
 

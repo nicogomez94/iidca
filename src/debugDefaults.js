@@ -5,7 +5,7 @@ const shared = {
   neighborhood: "Palermo",
   sport: "Fútbol",
   sports: "Futsal, entrenamiento funcional",
-  password: "iidca",
+  password: "",
 };
 
 const byRole = {
@@ -75,6 +75,7 @@ export function createRegistrationDefaults(role = "ATHLETE") {
     phone: "+5491100000000",
     instagram: "@iidca_prueba",
     website: "https://example.test",
+    imageUrl: "/images/sports/football.jpg",
     headline: "Propuesta deportiva de prueba",
     description: "Perfil ficticio para probar el registro y la revisión de IIDCA.",
   };
@@ -84,6 +85,6 @@ export function createLoginDefaults(adminPortal = false) {
   if (!testingMode) return {};
   return {
     email: adminPortal ? "admin@iidca.test" : window.sessionStorage.getItem("iidcaTestEmail") || "test@iidca.test",
-    password: shared.password,
+    password: "",
   };
 }

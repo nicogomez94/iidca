@@ -4,13 +4,13 @@ Aplicación responsive para acercar personas a oportunidades deportivas. Su tono
 
 ## Funciones
 
-- Inicio con fotografías de personas practicando deporte, transiciones respetuosas de la preferencia de movimiento reducido y tres historias de muestra con imágenes y créditos.
+- Inicio con fotografías de personas practicando deporte, transiciones respetuosas de la preferencia de movimiento reducido, tres historias de muestra y un formulario de contacto.
 - Directorio con búsqueda por deporte, ubicación y categoría, vista de listado y Google Maps, geolocalización opcional y fichas con actividades, dirección, fuente y estado de verificación.
 - Padrón inicial de 310 clubes reales obtenido de [Buenos Aires Data · Clubes](https://data.buenosaires.gob.ar/es_AR/dataset/clubes). La importación es repetible, registra procedencia y fecha, y evita duplicados por identificador de fuente o nombre y dirección.
 - Imágenes de sedes reales para clubes destacados y fotografías del deporte correspondiente para el resto. [Créditos y licencias](public/creditos-fotos.html) se generan con `npm run build` a partir de `data/image-credits.json`.
 - Registro e ingreso de deportistas, clubes, profesionales, federaciones y marcas. Los perfiles de deportistas son privados. Los perfiles públicos nuevos requieren aprobación.
 - Solicitud de titularidad de una ficha por una organización registrada, con evidencia revisada por el administrador. La aprobación vincula la ficha a su cuenta y permite editarla.
-- Panel administrador con acceso separado en `/admin`, gestión de solicitudes y fichas, bitácora de cambios y exportaciones privadas en Excel y PDF.
+- Panel administrador con acceso separado en `/admin`, filtros y paginación de fichas, gestión de solicitudes, bitácora de cambios y exportaciones privadas en Excel y PDF.
 - [Presentación para clubes](public/para-clubes.html) para compartir el funcionamiento de la plataforma.
 
 Las fichas importadas están marcadas como **Aún no verificada** hasta que IIDCA apruebe su titularidad o revise sus datos. La fuente original y las imágenes pueden cambiar; el contacto tomado del padrón queda privado hasta que la organización autorice su publicación. Las fotografías de actividades no se atribuyen a una sede particular.
@@ -23,7 +23,7 @@ Las fichas importadas están marcadas como **Aún no verificada** hasta que IIDC
 - `npm run db:deploy && npm run db:seed`
 - `npm run dev` y abrir [http://127.0.0.1:5173](http://127.0.0.1:5173).
 
-`npm run db:seed` carga el snapshot reproducible `data/clubes-caba.json`. Para actualizar el padrón desde su fuente oficial, usar `npm run db:import-clubs` y revisar el resultado. La importación conserva fichas verificadas o reclamadas y sus cambios de imagen. Los seis ejemplos ficticios de la primera versión se eliminan al sembrar datos.
+`npm run db:seed` carga el snapshot reproducible `data/clubes-caba.json`. Para actualizar el padrón desde su fuente oficial, usar `npm run db:import-clubs` y revisar el resultado. La importación conserva fichas verificadas o reclamadas y sus cambios de imagen. Los seis ejemplos ficticios de la primera versión se eliminan al sembrar datos. El formulario de contacto usa `CONTACT_TO=admin@iidca.com.ar` y `CONTACT_SITE=IIDCA Social Club` en el servidor, configurados en `.env` local y en `shared/app.env` en producción.
 
 Para crear un administrador fuera del modo demo, agregar temporalmente `ADMIN_EMAIL` y `ADMIN_PASSWORD` (mínimo 12 caracteres) a `.env`, ejecutar `npm run admin:create` y eliminar la contraseña del archivo. El acceso administrador está en `/admin`; el botón Ingresar del menú es para los demás perfiles.
 
@@ -41,7 +41,7 @@ El Git local tiene `origin` para [GitHub](https://github.com/nicogomez94/iidca) 
 
 `bash scripts/install-hosting-backup.sh` instala una copia diaria exclusiva de esta base en `shared/backups`, verifica que `pg_restore` pueda leer el archivo y conserva 14 días. Se recomienda probar una restauración en una base separada antes de depender de estas copias. Las exportaciones del administrador son adicionales a ese respaldo.
 
-El despliegue actual usa `DEMO_MODE=true` en el servidor y `VITE_DEMO_MODE=true` en el frontend. En este modo los formularios de prueba aparecen precargados y las contraseñas no se comprueban al ingresar ni son obligatorias al registrarse. Hay dos cuentas de prueba: `test@iidca.test` y `admin@iidca.test`; el campo contraseña puede quedar vacío o tener `iidca`. La primera entra por el botón Ingresar y la segunda por `/admin`. El despliegue se controla con `DEMO_MODE=true|false bash scripts/deploy-hosting.sh`; cuando se desactiva, el servidor vuelve a exigir las contraseñas reales. **El modo demo permite que cualquiera que conozca un email existente entre a esa cuenta, incluido el administrador; usalo solo durante pruebas controladas.**
+El despliegue actual usa `DEMO_MODE=true` en el servidor y `VITE_DEMO_MODE=true` en el frontend. En este modo los formularios de prueba aparecen precargados y las contraseñas no se comprueban al ingresar ni son obligatorias al registrarse. Hay dos cuentas de prueba: `test@iidca.test` y `admin@iidca.test`; el campo contraseña se deja vacío. La primera entra por el botón Ingresar y la segunda por `/admin`. El despliegue se controla con `DEMO_MODE=true|false bash scripts/deploy-hosting.sh`; cuando se desactiva, el servidor vuelve a exigir las contraseñas reales. **El modo demo permite que cualquiera que conozca un email existente entre a esa cuenta, incluido el administrador; usalo solo durante pruebas controladas.**
 
 ## Privacidad
 

@@ -122,7 +122,7 @@ function Header({ view, onNavigate, onAuth, user, onLogout }) {
                     go(user.role === "ADMIN" ? "admin" : "profile")
                   }
                 >
-                  Mi espacio
+                  {user.role === "ADMIN" ? "Panel admin" : "Mi espacio"}
                 </button>
                 <button
                   onClick={() => {
@@ -165,7 +165,7 @@ function Header({ view, onNavigate, onAuth, user, onLogout }) {
                 <span className="account-avatar">
                   {(user.profile?.name || user.email)[0].toUpperCase()}
                 </span>
-                Mi espacio
+                {user.role === "ADMIN" ? "Panel admin" : "Mi espacio"}
               </button>
               <button
                 className="icon-button desktop-logout"
@@ -322,7 +322,7 @@ function HeroGraphic() {
       <img className="hero-photo-main" src="/images/editorial/park-exercise.jpg" alt="Personas haciendo ejercicio juntas en un parque" />
       <img className="hero-photo-small" src="/images/sports/wheelchair.jpg" alt="Mujeres jugando básquet adaptado" />
       <div className="hero-sticker"><span>EL DEPORTE<br />NOS ENCUENTRA</span><ArrowDownRight size={32} /></div>
-      <div className="hero-visual-caption">Clubes reales. Personas reales. Más encuentros.</div>
+      <div className="hero-visual-caption">Tu barrio también juega.</div>
     </div>
   );
 }
@@ -412,7 +412,6 @@ function Home({ onSearch, onNavigate, onAuth }) {
                 para encontrar tu próximo movimiento.
               </span>
             </div>
-            <p className="hero-photo-credit"><a href="/creditos-fotos.html">Créditos de fotografía</a></p>
           </div>
           <HeroGraphic />
         </div>
@@ -572,7 +571,67 @@ function Home({ onSearch, onNavigate, onAuth }) {
           </div>
         </div>
       </section>
+      <ContactSection />
     </main>
+  );
+}
+
+function ContactSection() {
+  const [values, setValues] = useState(() => testingMode ? {
+    name: "Alex Prueba",
+    email: "test@iidca.test",
+    message: "Hola, quiero conocer más sobre IIDCA Social Club y sus actividades.",
+  } : { name: "", email: "", message: "" });
+  const [state, setState] = useState("idle");
+  const [feedback, setFeedback] = useState("");
+  const submit = async (event) => {
+    event.preventDefault();
+    const name = values.name.trim();
+    const email = values.email.trim();
+    const message = values.message.trim();
+    if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !message) {
+      setState("error");
+      setFeedback("Completá nombre, email válido y mensaje para enviarlo.");
+      return;
+    }
+    setState("sending");
+    setFeedback("");
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, message, company: "" }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || data?.success !== true) throw new Error(data?.error || "No se pudo enviar el mensaje. Probá nuevamente.");
+      setValues({ name: "", email: "", message: "" });
+      setState("success");
+      setFeedback("¡Gracias! Recibimos tu mensaje y te vamos a responder pronto.");
+    } catch (error) {
+      setState("error");
+      setFeedback(error.message || "No se pudo enviar el mensaje. Probá nuevamente.");
+    }
+  };
+  return (
+    <section className="contact-section" id="contacto" aria-labelledby="contact-title">
+      <div className="container contact-inner">
+        <div className="contact-copy" data-reveal>
+          <div className="eyebrow eyebrow-blue">HABLEMOS</div>
+          <h2 id="contact-title">El próximo encuentro <em>empieza acá.</em></h2>
+          <p>¿Tenés un club, una propuesta o una pregunta? Escribinos. Nos gusta conocer a quienes hacen crecer el deporte en su comunidad.</p>
+          <span><Heart size={18} /> Estamos del otro lado.</span>
+        </div>
+        <form className="contact-form" onSubmit={submit} data-reveal>
+          <div className="contact-form-grid">
+            <label>Tu nombre<input type="text" value={values.name} onChange={(event) => setValues({ ...values, name: event.target.value })} required maxLength={120} placeholder="¿Cómo te llamás?" /></label>
+            <label>Tu email<input type="email" value={values.email} onChange={(event) => setValues({ ...values, email: event.target.value })} required maxLength={200} placeholder="nombre@ejemplo.com" /></label>
+          </div>
+          <label>Tu mensaje<textarea value={values.message} onChange={(event) => setValues({ ...values, message: event.target.value })} required maxLength={3000} rows={5} placeholder="Contanos en qué podemos ayudarte" /></label>
+          <div className="contact-form-bottom"><span>Te respondemos por email.</span><button className="button button-orange" type="submit" disabled={state === "sending"}>{state === "sending" ? "Enviando..." : "Enviar mensaje"} <ArrowUpRight size={18} /></button></div>
+          {feedback && <p className={`contact-feedback ${state}`} role="status">{feedback}</p>}
+        </form>
+      </div>
+    </section>
   );
 }
 
@@ -1839,6 +1898,10 @@ function Admin({ user, onAuth }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [claimPage, setClaimPage] = useState(1);
   const [editing, setEditing] = useState(null);
   const load = () =>
     api("/admin/overview")
@@ -1914,7 +1977,17 @@ function Admin({ user, onAuth }) {
   const published =
     overview?.profiles.filter((profile) => profile.status === "PUBLISHED")
       .length || 0;
-  const visibleProfiles = (overview?.profiles || []).filter((profile) => `${profile.name} ${profile.city} ${profile.neighborhood || ""} ${profile.accountEmail || ""}`.toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es")));
+  const visibleProfiles = (overview?.profiles || []).filter((profile) =>
+    `${profile.name} ${profile.city} ${profile.neighborhood || ""} ${profile.accountEmail || ""}`.toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es"))
+    && (!statusFilter || profile.status === statusFilter)
+    && (!categoryFilter || profile.category === categoryFilter));
+  const pageSize = 12;
+  const pageCount = Math.max(1, Math.ceil(visibleProfiles.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pagedProfiles = visibleProfiles.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const claims = overview?.claims || [];
+  const claimPageCount = Math.max(1, Math.ceil(claims.length / 5));
+  const currentClaimPage = Math.min(claimPage, claimPageCount);
   return (
     <main className="dashboard-page admin-page">
       <div className="container dashboard-container">
@@ -1959,23 +2032,30 @@ function Admin({ user, onAuth }) {
         </section>
         <section className="dashboard-card admin-claims">
           <div className="admin-list-heading"><h2>Reclamos por verificar</h2><span>{overview?.claims?.length || 0} pendientes</span></div>
-          {overview?.claims?.length ? overview.claims.map((claim) => (
+          {claims.length ? claims.slice((currentClaimPage - 1) * 5, currentClaimPage * 5).map((claim) => (
             <article className="admin-claim" key={claim.id}>
               <div><strong>{claim.profileName}</strong><p>Solicita: {claim.applicantName || claim.applicant} · {claim.applicant}</p><blockquote>{claim.evidence}</blockquote></div>
               <div className="admin-row-actions"><button disabled={busy === claim.id} onClick={() => decideClaim(claim.id, "APPROVED")}>Aprobar vínculo</button><button disabled={busy === claim.id} onClick={() => decideClaim(claim.id, "REJECTED")}>Rechazar</button></div>
             </article>
           )) : <p>No hay reclamos pendientes.</p>}
+          {claimPageCount > 1 && <div className="admin-pagination"><span>Página {currentClaimPage} de {claimPageCount}</span><div><button disabled={currentClaimPage === 1} onClick={() => setClaimPage(currentClaimPage - 1)}>Anterior</button><button disabled={currentClaimPage === claimPageCount} onClick={() => setClaimPage(currentClaimPage + 1)}>Siguiente</button></div></div>}
         </section>
         <section className="dashboard-card admin-list">
           <div className="admin-list-heading">
             <h2>Perfiles de la plataforma</h2>
-            <span>{overview?.profiles.length || 0} registros</span>
+            <span>{visibleProfiles.length} de {overview?.profiles.length || 0} registros</span>
           </div>
-          <label className="admin-search">Buscar por nombre, zona o cuenta <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ej. Club Ferro, Caballito" /></label>
+          <div className="admin-filters">
+            <label className="admin-search">Buscar por nombre, zona o cuenta <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Ej. Club Ferro, Caballito" /></label>
+            <label>Estado<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}><option value="">Todos</option><option value="PENDING">Pendientes</option><option value="PUBLISHED">Publicados</option><option value="HIDDEN">Ocultos</option></select></label>
+            <label>Tipo de perfil<select value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setPage(1); }}><option value="">Todos</option>{categories.filter((item) => item.value).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}<option value="ATHLETE">Deportistas</option></select></label>
+          </div>
           {!overview ? (
             <p>Cargando perfiles...</p>
+          ) : !pagedProfiles.length ? (
+            <p className="admin-empty">No hay perfiles con esos filtros.</p>
           ) : (
-            visibleProfiles.map((profile) => (
+            pagedProfiles.map((profile) => (
               <div className="admin-row" key={profile.id}>
                 <div className="admin-row-icon">
                   {roleIcon(profile.category, 21)}
@@ -2022,6 +2102,7 @@ function Admin({ user, onAuth }) {
               </div>
             ))
           )}
+          {overview && pageCount > 1 && <div className="admin-pagination"><span>Mostrando {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, visibleProfiles.length)} de {visibleProfiles.length} · página {currentPage} de {pageCount}</span><div><button disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Anterior</button><button disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>Siguiente</button></div></div>}
         </section>
         {editing && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setEditing(null)}>
           <form className="admin-edit-modal" onSubmit={saveEdit} role="dialog" aria-modal="true" aria-label={`Editar ${editing.name}`}>
@@ -2060,7 +2141,7 @@ function Footer({ onNavigate, onAuth }) {
         <div className="footer-links">
           <strong>Participá</strong>
           <a href="/para-clubes.html">Presentación para clubes</a>
-          <a href="/creditos-fotos.html">Créditos de fotografía</a>
+          <button onClick={() => onNavigate("home", "contacto")}>Contacto</button>
           <button onClick={() => onAuth("register")}>Crear un perfil</button>
           <button onClick={() => onAuth("login")}>Ingresar</button>
           <span>Proyecto piloto · Ciudad de Buenos Aires</span>
