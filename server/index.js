@@ -534,8 +534,30 @@ app.get("/api/admin/export/:format", auth, adminOnly, async (req, res, next) => 
   try {
     const format = req.params.format;
     if (!["xlsx", "pdf"].includes(format)) throw validationError("Formato inválido.");
-    const profiles = await prisma.profile.findMany({ include: { user: { select: { email: true } }, claimedBy: { select: { email: true } } }, orderBy: { name: "asc" } });
-    await audit(req.user.id, `EXPORT_${format.toUpperCase()}`, null, { records: profiles.length });
+    const filters = {
+      q: cleanText(req.query.q, 100),
+      category: cleanText(req.query.category, 30),
+      status: cleanText(req.query.status, 30),
+      sport: cleanText(req.query.sport, 60),
+      location: cleanText(req.query.location, 100),
+    };
+    if (filters.category && !allowedRoles.includes(filters.category)) throw validationError("Tipo de perfil inválido.");
+    if (filters.status && !["PENDING", "PUBLISHED", "HIDDEN"].includes(filters.status)) throw validationError("Estado inválido.");
+    const conditions = [];
+    if (filters.category) conditions.push({ category: filters.category });
+    if (filters.status) conditions.push({ status: filters.status });
+    if (filters.sport) conditions.push({ OR: [{ sports: { has: filters.sport } }, { sport: filters.sport }] });
+    if (filters.location) conditions.push({ OR: [{ city: { contains: filters.location, mode: "insensitive" } }, { neighborhood: { contains: filters.location, mode: "insensitive" } }] });
+    if (filters.q) conditions.push({ OR: [
+      { name: { contains: filters.q, mode: "insensitive" } },
+      { city: { contains: filters.q, mode: "insensitive" } },
+      { neighborhood: { contains: filters.q, mode: "insensitive" } },
+      { user: { is: { email: { contains: filters.q, mode: "insensitive" } } } },
+      { claimedBy: { is: { email: { contains: filters.q, mode: "insensitive" } } } },
+    ] });
+    const profiles = await prisma.profile.findMany({ where: { AND: conditions }, include: { user: { select: { email: true } }, claimedBy: { select: { email: true } } }, orderBy: { name: "asc" } });
+    if (!profiles.length) return res.status(404).json({ error: "No hay perfiles para exportar con esos filtros." });
+    await audit(req.user.id, `EXPORT_${format.toUpperCase()}`, null, { records: profiles.length, filters });
     const rows = profiles.map((profile) => ({
       name: profile.name, type: profile.category, verification: profile.verification,
       status: profile.status, sports: profile.sports.join(", "), city: profile.city,

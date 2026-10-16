@@ -1894,17 +1894,20 @@ function MemberProfile({ user, onUpdate, onExplore }) {
 }
 
 function Admin({ user, onAuth, onLogout, onNavigate }) {
+  const sectionFromPath = () => ({ "/admin/reclamos": "reclamos", "/admin/perfiles": "perfiles" })[window.location.pathname] || "resumen";
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [sportFilter, setSportFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
   const [page, setPage] = useState(1);
   const [claimPage, setClaimPage] = useState(1);
   const [editing, setEditing] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState("resumen");
+  const [activeSection, setActiveSection] = useState(sectionFromPath);
   const load = () =>
     api("/admin/overview")
       .then(setOverview)
@@ -1912,6 +1915,11 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
   useEffect(() => {
     if (user?.role === "ADMIN") load();
   }, [user]);
+  useEffect(() => {
+    const onPopState = () => setActiveSection(sectionFromPath());
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
   const decideClaim = async (id, decision) => {
     setBusy(id);
     setError("");
@@ -1938,12 +1946,13 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
   const downloadExport = async (format) => {
     setError("");
     try {
-      const response = await fetch(`/api/admin/export/${format}`, { credentials: "same-origin" });
+      const params = new URLSearchParams(Object.entries({ q: search, status: statusFilter, category: categoryFilter, sport: sportFilter, location: locationFilter }).filter(([, value]) => value));
+      const response = await fetch(`/api/admin/export/${format}?${params}`, { credentials: "same-origin" });
       if (!response.ok) throw new Error((await response.json()).error || "No pudimos descargar el padrón.");
       const url = URL.createObjectURL(await response.blob());
       const link = document.createElement("a");
       link.href = url;
-      link.download = `iidca-padron.${format}`;
+      link.download = `iidca-padron${params.size ? "-filtrado" : ""}.${format}`;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (issue) { setError(issue.message); }
@@ -1983,9 +1992,12 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
     overview?.profiles.filter((profile) => profile.status === "PUBLISHED")
       .length || 0;
   const visibleProfiles = (overview?.profiles || []).filter((profile) =>
-    `${profile.name} ${profile.city} ${profile.neighborhood || ""} ${profile.accountEmail || ""}`.toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es"))
+    [profile.name, profile.city, profile.neighborhood, profile.accountEmail].some((value) => (value || "").toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es")))
     && (!statusFilter || profile.status === statusFilter)
-    && (!categoryFilter || profile.category === categoryFilter));
+    && (!categoryFilter || profile.category === categoryFilter)
+    && (!sportFilter || profile.sports.includes(sportFilter) || profile.sport === sportFilter)
+    && (!locationFilter || `${profile.city} ${profile.neighborhood || ""}`.toLocaleLowerCase("es").includes(locationFilter.toLocaleLowerCase("es"))));
+  const sports = [...new Set((overview?.profiles || []).flatMap((profile) => profile.sports || []))].filter(Boolean).sort((a, b) => a.localeCompare(b, "es"));
   const pageSize = 12;
   const pageCount = Math.max(1, Math.ceil(visibleProfiles.length / pageSize));
   const currentPage = Math.min(page, pageCount);
@@ -1996,7 +2008,8 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
   const goToSection = (section) => {
     setActiveSection(section);
     setSidebarOpen(false);
-    document.getElementById(`admin-${section}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.history.pushState(null, "", section === "resumen" ? "/admin" : `/admin/${section}`);
+    window.scrollTo({ top: 0, behavior: "instant" });
   };
   return (
     <main className="admin-shell">
@@ -2008,7 +2021,6 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
           <button className={activeSection === "resumen" ? "active" : ""} onClick={() => goToSection("resumen")}><Compass size={19} /> Resumen</button>
           <button className={activeSection === "reclamos" ? "active" : ""} onClick={() => goToSection("reclamos")}><BadgeCheck size={19} /> Reclamos <span>{claims.length}</span></button>
           <button className={activeSection === "perfiles" ? "active" : ""} onClick={() => goToSection("perfiles")}><Users size={19} /> Perfiles <span>{overview?.profiles.length ?? "—"}</span></button>
-          <button className={activeSection === "exportaciones" ? "active" : ""} onClick={() => goToSection("exportaciones")}><ArrowDownRight size={19} /> Exportaciones</button>
         </nav>
         <div className="admin-sidebar-bottom">
           <div className="admin-sidebar-account"><span>{user.email?.slice(0, 1).toUpperCase() || "A"}</span><div><strong>Administración</strong><small>{user.email}</small></div></div>
@@ -2018,14 +2030,14 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
       </aside>
       <div className="admin-main">
         <div className="admin-topbar"><button className="admin-menu-toggle" aria-label="Abrir menú de administración" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)}><Menu size={23} /></button><span>Administración <span>/</span> IIDCA Social Club</span><span className="admin-topbar-status"><i /> Panel activo</span></div>
-        <div className="admin-content" id="admin-resumen">
-          <div className="admin-heading"><div><span>VISTA GENERAL</span><h1>Resumen</h1><p>Gestioná perfiles, reclamos y datos desde un solo lugar.</p></div><span className="admin-heading-date">{new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long", year: "numeric" }).format(new Date())}</span></div>
+        <div className="admin-content">
+          <div className="admin-heading"><div><span>PANEL DE GESTIÓN</span><h1>{activeSection === "resumen" ? "Resumen" : activeSection === "reclamos" ? "Reclamos" : "Perfiles"}</h1><p>{activeSection === "resumen" ? "Una mirada rápida a la comunidad." : activeSection === "reclamos" ? "Revisá las solicitudes de vinculación pendientes." : "Administrá las fichas y descargá el padrón con filtros."}</p></div><span className="admin-heading-date">{new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long", year: "numeric" }).format(new Date())}</span></div>
         {error && (
           <div className="feedback error" role="alert">
             {error}
           </div>
         )}
-        <div className="admin-stats">
+        {activeSection === "resumen" && <><div className="admin-stats">
           <div>
             <span>Usuarios registrados</span>
             <strong>{overview?.users ?? "—"}</strong>
@@ -2042,17 +2054,25 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
             <ShieldCheck size={25} />
           </div>
         </div>
-        <section className="dashboard-card admin-tools" id="admin-exportaciones">
-          <div>
-            <h2>Padrón privado</h2>
-            <p>Los datos completos y las exportaciones son exclusivos para administración.</p>
+        <div className="admin-overview-links"><button onClick={() => goToSection("reclamos")}><BadgeCheck size={24} /><strong>Reclamos</strong><span>{claims.length} por revisar</span><ArrowRight size={18} /></button><button onClick={() => goToSection("perfiles")}><Users size={24} /><strong>Perfiles</strong><span>{overview?.profiles.length ?? "—"} fichas registradas</span><ArrowRight size={18} /></button></div></>}
+        {activeSection === "perfiles" && <section className="dashboard-card admin-export-panel">
+          <div className="admin-export-head">
+            <h2>Descargar padrón</h2>
+            <p>Elegí los perfiles que querés incluir en Excel o PDF.</p>
           </div>
-          <div className="admin-export-actions">
-            <button className="button button-outline" onClick={() => downloadExport("xlsx")}>Descargar Excel</button>
-            <button className="button button-outline" onClick={() => downloadExport("pdf")}>Descargar PDF</button>
+          <div className="admin-filters">
+            <label className="admin-search">Buscar por nombre, zona o cuenta <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Ej. Club Ferro, Caballito" /></label>
+            <label>Estado<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}><option value="">Todos</option><option value="PENDING">Pendientes</option><option value="PUBLISHED">Publicados</option><option value="HIDDEN">Ocultos</option></select></label>
+            <label>Tipo de perfil<select value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setPage(1); }}><option value="">Todos</option>{categories.filter((item) => item.value).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}<option value="ATHLETE">Deportistas</option></select></label>
+            <label>Deporte<select value={sportFilter} onChange={(event) => { setSportFilter(event.target.value); setPage(1); }}><option value="">Todos los deportes</option>{sports.map((sport) => <option key={sport} value={sport}>{sport}</option>)}</select></label>
+            <label>Ciudad o barrio<input value={locationFilter} onChange={(event) => { setLocationFilter(event.target.value); setPage(1); }} placeholder="Ej. Caballito" /></label>
           </div>
-        </section>
-        <section className="dashboard-card admin-claims" id="admin-reclamos">
+          <div className="admin-export-footer"><span>{visibleProfiles.length} registros seleccionados</span><div className="admin-export-actions">
+            <button className="button button-outline" disabled={!visibleProfiles.length} onClick={() => downloadExport("xlsx")}>Descargar Excel</button>
+            <button className="button button-outline" disabled={!visibleProfiles.length} onClick={() => downloadExport("pdf")}>Descargar PDF</button>
+          </div></div>
+        </section>}
+        {activeSection === "reclamos" && <section className="dashboard-card admin-claims">
           <div className="admin-list-heading"><h2>Reclamos por verificar</h2><span>{overview?.claims?.length || 0} pendientes</span></div>
           {claims.length ? claims.slice((currentClaimPage - 1) * 5, currentClaimPage * 5).map((claim) => (
             <article className="admin-claim" key={claim.id}>
@@ -2061,16 +2081,11 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
             </article>
           )) : <p>No hay reclamos pendientes.</p>}
           {claimPageCount > 1 && <div className="admin-pagination"><span>Página {currentClaimPage} de {claimPageCount}</span><div><button disabled={currentClaimPage === 1} onClick={() => setClaimPage(currentClaimPage - 1)}>Anterior</button><button disabled={currentClaimPage === claimPageCount} onClick={() => setClaimPage(currentClaimPage + 1)}>Siguiente</button></div></div>}
-        </section>
-        <section className="dashboard-card admin-list" id="admin-perfiles">
+        </section>}
+        {activeSection === "perfiles" && <section className="dashboard-card admin-list">
           <div className="admin-list-heading">
             <h2>Perfiles de la plataforma</h2>
             <span>{visibleProfiles.length} de {overview?.profiles.length || 0} registros</span>
-          </div>
-          <div className="admin-filters">
-            <label className="admin-search">Buscar por nombre, zona o cuenta <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Ej. Club Ferro, Caballito" /></label>
-            <label>Estado<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}><option value="">Todos</option><option value="PENDING">Pendientes</option><option value="PUBLISHED">Publicados</option><option value="HIDDEN">Ocultos</option></select></label>
-            <label>Tipo de perfil<select value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setPage(1); }}><option value="">Todos</option>{categories.filter((item) => item.value).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}<option value="ATHLETE">Deportistas</option></select></label>
           </div>
           {!overview ? (
             <p>Cargando perfiles...</p>
@@ -2125,7 +2140,7 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
             ))
           )}
           {overview && pageCount > 1 && <div className="admin-pagination"><span>Mostrando {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, visibleProfiles.length)} de {visibleProfiles.length} · página {currentPage} de {pageCount}</span><div><button disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Anterior</button><button disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>Siguiente</button></div></div>}
-        </section>
+        </section>}
         {editing && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setEditing(null)}>
           <form className="admin-edit-modal" onSubmit={saveEdit} role="dialog" aria-modal="true" aria-label={`Editar ${editing.name}`}>
             <button type="button" className="modal-close" onClick={() => setEditing(null)} aria-label="Cerrar"><X /></button>
@@ -2190,7 +2205,7 @@ function Footer({ onNavigate, onAuth }) {
 
 export default function App() {
   const routeFromHash = () =>
-    window.location.pathname === "/admin" ? "admin" : ({
+    (window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/")) ? "admin" : ({
       "#explorar": "explore",
       "#mi-espacio": "profile",
     })[window.location.hash] || "home";
@@ -2207,7 +2222,7 @@ export default function App() {
     api("/me")
       .then((data) => setUser(data.user))
       .catch(() => {
-        if (window.location.pathname === "/admin") setAuthMode("admin");
+        if (window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/")) setAuthMode("admin");
       });
   }, []);
   useEffect(() => {
