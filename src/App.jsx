@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   APIProvider,
   Map as GoogleMap,
@@ -110,6 +110,9 @@ function Header({ view, onNavigate, onAuth, user, onLogout }) {
           </button>
           <button onClick={() => go("home", "proposito")}>
             Nuestro propósito
+          </button>
+          <button onClick={() => go("home", "novedades")}>
+            Novedades
           </button>
           <div className="mobile-nav-actions">
             {user ? (
@@ -316,7 +319,7 @@ function SearchForm({ initial = defaultFilters, onSearch, compact = false }) {
 function HeroGraphic() {
   return (
     <div className="hero-visual">
-      <img className="hero-photo-main" src="/images/sports/volleyball.jpg" alt="Personas jugando vóley en una cancha comunitaria" />
+      <img className="hero-photo-main" src="/images/editorial/park-exercise.jpg" alt="Personas haciendo ejercicio juntas en un parque" />
       <img className="hero-photo-small" src="/images/sports/wheelchair.jpg" alt="Mujeres jugando básquet adaptado" />
       <div className="hero-sticker"><span>EL DEPORTE<br />NOS ENCUENTRA</span><ArrowDownRight size={32} /></div>
       <div className="hero-visual-caption">Clubes reales. Personas reales. Más encuentros.</div>
@@ -325,6 +328,49 @@ function HeroGraphic() {
 }
 
 function Home({ onSearch, onNavigate, onAuth }) {
+  useEffect(() => {
+    const elements = document.querySelectorAll("[data-reveal]");
+    if (!("IntersectionObserver" in window)) {
+      elements.forEach((element) => element.classList.add("is-visible"));
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("is-visible");
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0.12, rootMargin: "0px 0px -25px 0px" });
+    elements.forEach((element) => observer.observe(element));
+    return () => observer.disconnect();
+  }, []);
+
+  const stories = [
+    {
+      image: "/images/editorial/fitness-class.jpg",
+      alt: "Personas ejercitándose juntas en una clase de gimnasio",
+      category: "ENTRENAR EN COMPAÑÍA",
+      title: "Una clase puede ser el comienzo de un gran grupo.",
+      description: "Moverse con otras personas cambia la energía de cada entrenamiento.",
+      sport: "Gimnasia",
+    },
+    {
+      image: "/images/editorial/park-exercise.jpg",
+      alt: "Grupo de mujeres haciendo actividad física al aire libre",
+      category: "AIRE LIBRE",
+      title: "El barrio también puede ser tu lugar para moverte.",
+      description: "Una plaza, una actividad y la excusa perfecta para encontrarse.",
+      sport: "",
+    },
+    {
+      image: "/images/editorial/yoga-class.jpg",
+      alt: "Personas practicando yoga en una clase grupal",
+      category: "BIENESTAR",
+      title: "Empezar yoga se disfruta más cuando no estás solo.",
+      description: "Hay espacios cercanos para probar, aprender y volver a elegirte.",
+      sport: "Yoga",
+    },
+  ];
   return (
     <main>
       <section className="hero-section">
@@ -393,9 +439,39 @@ function Home({ onSearch, onNavigate, onAuth }) {
         </div>
       </section>
 
+      <section className="news-section" id="novedades" aria-labelledby="news-title">
+        <div className="container">
+          <div className="news-heading" data-reveal>
+            <div>
+              <div className="eyebrow eyebrow-blue">UN POCO DE INSPIRACIÓN</div>
+              <h2 id="news-title">Historias para <em>poner el cuerpo</em> en movimiento.</h2>
+            </div>
+            <p>Ideas para imaginar todo lo que puede pasar cuando encontrás un lugar para empezar. <strong>Historias de muestra.</strong></p>
+          </div>
+          <div className="news-grid">
+            {stories.map((story, index) => (
+              <article className={`news-card news-card-${index + 1}`} key={story.title} data-reveal>
+                <div className="news-image">
+                  <img src={story.image} alt={story.alt} loading="lazy" />
+                  <span>HISTORIA DE MUESTRA</span>
+                </div>
+                <div className="news-content">
+                  <span className="news-category">{story.category}</span>
+                  <h3>{story.title}</h3>
+                  <p>{story.description}</p>
+                  <button onClick={() => onSearch({ ...defaultFilters, sport: story.sport })}>
+                    Explorar actividades <ArrowUpRight size={18} />
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="path-section" id="como-funciona">
         <div className="container">
-          <div className="section-heading path-heading">
+          <div className="section-heading path-heading" data-reveal>
             <div>
               <div className="eyebrow eyebrow-blue">¿POR DÓNDE EMPEZAMOS?</div>
               <h2>
@@ -410,7 +486,7 @@ function Home({ onSearch, onNavigate, onAuth }) {
             </p>
           </div>
           <div className="path-grid">
-            <article className="path-card path-card-one">
+            <article className="path-card path-card-one" data-reveal>
               <div className="path-icon">
                 <Compass size={30} />
               </div>
@@ -424,7 +500,7 @@ function Home({ onSearch, onNavigate, onAuth }) {
                 Explorar directorio <ArrowUpRight size={17} />
               </button>
             </article>
-            <article className="path-card path-card-two">
+            <article className="path-card path-card-two" data-reveal>
               <div className="path-icon">
                 <MapPin size={30} />
               </div>
@@ -438,7 +514,7 @@ function Home({ onSearch, onNavigate, onAuth }) {
                 Ver el mapa <ArrowUpRight size={17} />
               </button>
             </article>
-            <article className="path-card path-card-three">
+            <article className="path-card path-card-three" data-reveal>
               <div className="path-icon">
                 <Users size={30} />
               </div>
@@ -458,7 +534,7 @@ function Home({ onSearch, onNavigate, onAuth }) {
 
       <section className="audience-section">
         <div className="container audience-inner">
-          <div className="audience-copy">
+          <div className="audience-copy" data-reveal>
             <div className="eyebrow eyebrow-light">UN CLUB PARA TODOS</div>
             <h2>
               Más gente activa.
@@ -477,7 +553,7 @@ function Home({ onSearch, onNavigate, onAuth }) {
               Quiero ser parte <ArrowUpRight size={18} />
             </button>
           </div>
-          <div className="audience-pills">
+          <div className="audience-pills" data-reveal>
             <span className="pill pill-one">
               <Dumbbell size={25} /> Deportistas sociales
             </span>
@@ -551,6 +627,11 @@ function FitGoogleMap({ profiles, location }) {
   const map = useMap();
   useEffect(() => {
     if (!map || !window.google?.maps) return;
+    if (profiles.length === 1) {
+      map.setCenter({ lat: profiles[0].latitude, lng: profiles[0].longitude });
+      map.setZoom(14);
+      return;
+    }
     const bounds = new window.google.maps.LatLngBounds();
     profiles.forEach((profile) => bounds.extend({ lat: profile.latitude, lng: profile.longitude }));
     if (location.lat && location.lng) bounds.extend({ lat: Number(location.lat), lng: Number(location.lng) });
@@ -559,40 +640,99 @@ function FitGoogleMap({ profiles, location }) {
   return null;
 }
 
+function FocusGoogleMap({ profile }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!map || !profile) return;
+    map.panTo({ lat: profile.latitude, lng: profile.longitude });
+    map.setZoom(14);
+  }, [map, profile]);
+  return null;
+}
+
+function normalizeMapText(value) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+const mapSports = ["Fútbol", "Básquet", "Vóley", "Natación", "Tenis", "Gimnasia"];
+const mapPin = (color) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="34" height="43" viewBox="0 0 34 43"><path d="M17 1C8.2 1 1 8.2 1 17c0 11.4 16 24 16 24s16-12.6 16-24C33 8.2 25.8 1 17 1Z" fill="${color}" stroke="white" stroke-width="2"/><circle cx="17" cy="17" r="6" fill="white"/></svg>`)}`;
+
 function DirectoryMap({ profiles, filters, onOpen }) {
   const [focused, setFocused] = useState(null);
-  const points = profiles.filter(
-    (profile) => profile.latitude !== null && profile.longitude !== null,
-  );
-  const embedQuery = focused
-    ? `${focused.latitude},${focused.longitude}`
-    : filters.location || "clubes deportivos Ciudad de Buenos Aires";
+  const [mapSearch, setMapSearch] = useState("");
+  const [selectedSport, setSelectedSport] = useState("");
+  const [selectedArea, setSelectedArea] = useState("");
+  const points = useMemo(() => profiles.filter(
+    (profile) => Number.isFinite(Number(profile.latitude)) && Number.isFinite(Number(profile.longitude)) && profile.latitude !== null && profile.longitude !== null,
+  ), [profiles]);
+  const areas = useMemo(() => [...new Set(points.map((profile) => profile.neighborhood || profile.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es")), [points]);
+  const visiblePoints = useMemo(() => points.filter((profile) => {
+    const haystack = normalizeMapText([profile.name, profile.neighborhood, profile.city, ...(profile.sports || [])].join(" "));
+    return (!mapSearch || haystack.includes(normalizeMapText(mapSearch)))
+      && (!selectedArea || (profile.neighborhood || profile.city) === selectedArea)
+      && (!selectedSport || (profile.sports || []).some((sport) => normalizeMapText(sport).includes(normalizeMapText(selectedSport))));
+  }), [points, mapSearch, selectedArea, selectedSport]);
+  const selected = visiblePoints.find((profile) => profile.id === focused?.id) || null;
+  const clearMapFilters = () => {
+    setMapSearch("");
+    setSelectedSport("");
+    setSelectedArea("");
+    setFocused(null);
+  };
+  const embedQuery = selected
+    ? `${selected.latitude},${selected.longitude}`
+    : `${mapSearch || selectedSport || "clubes deportivos"} ${selectedArea || filters.location || "Ciudad de Buenos Aires"}`;
   return (
-    <div className="map-frame">
-      {googleMapsKey ? (
-        <APIProvider apiKey={googleMapsKey} language="es" region="AR">
-          <GoogleMap defaultCenter={{ lat: -34.6037, lng: -58.3816 }} defaultZoom={11} gestureHandling="cooperative" className="directory-map">
-            <FitGoogleMap profiles={points} location={filters} />
-            {points.map((profile) => (
-              <Marker key={profile.id} position={{ lat: profile.latitude, lng: profile.longitude }} title={profile.name} onClick={() => onOpen(profile)} />
-            ))}
-          </GoogleMap>
-        </APIProvider>
-      ) : (
-        <div className="google-map-with-list">
-          <iframe className="directory-map" title="Google Maps: clubes deportivos" src={`https://maps.google.com/maps?q=${encodeURIComponent(embedQuery)}&z=13&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
-          <div className="google-map-list" aria-label="Ubicaciones del directorio">
-            {points.map((profile) => (
-              <button key={profile.id} className={focused?.id === profile.id ? "selected" : ""} onClick={() => setFocused(profile)}>
-                <strong>{profile.name}</strong><span>{profile.neighborhood || profile.city}</span>
+    <div className="map-frame" aria-label="Mapa y filtros de clubes">
+      <div className="map-topbar">
+        <div><span className="map-topbar-kicker">EXPLORÁ EN EL MAPA</span><strong>Tu próximo lugar puede estar cerca.</strong></div>
+        <span className="map-total"><MapPin size={16} /> {visiblePoints.length} ubicaciones</span>
+      </div>
+      <div className="map-layout">
+        <div className="map-canvas">
+          {googleMapsKey ? (
+            <APIProvider apiKey={googleMapsKey} language="es" region="AR">
+              <GoogleMap defaultCenter={{ lat: -34.6037, lng: -58.3816 }} defaultZoom={11} gestureHandling="cooperative" className="directory-map" mapTypeControl={false} streetViewControl={false} fullscreenControl>
+                <FitGoogleMap profiles={visiblePoints} location={filters} />
+                <FocusGoogleMap profile={selected} />
+                {visiblePoints.map((profile) => (
+                  <Marker key={profile.id} position={{ lat: Number(profile.latitude), lng: Number(profile.longitude) }} icon={mapPin(selected?.id === profile.id ? "#ff9d00" : "#090c70")} title={profile.name} onClick={() => setFocused(profile)} />
+                ))}
+              </GoogleMap>
+            </APIProvider>
+          ) : (
+            <iframe className="directory-map" title="Google Maps: clubes deportivos" src={`https://maps.google.com/maps?q=${encodeURIComponent(embedQuery)}&z=12&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+          )}
+          {selected && (
+            <div className="map-selected-card">
+              <img src={selected.imageUrl || "/images/sports/running.jpg"} alt="" />
+              <div><span>ESTÁS VIENDO</span><strong>{selected.name}</strong><small>{selected.neighborhood || selected.city}</small></div>
+              <button onClick={() => onOpen(selected)} aria-label={`Ver ficha de ${selected.name}`}><ArrowUpRight size={20} /></button>
+            </div>
+          )}
+        </div>
+        <aside className="map-sidebar" aria-label="Filtros y clubes del mapa">
+          <div className="map-filters">
+            <div className="map-filters-heading"><strong>Filtrá tu búsqueda</strong><button onClick={clearMapFilters}>Limpiar</button></div>
+            <label className="map-search-field"><Search size={18} /><input value={mapSearch} onChange={(event) => setMapSearch(event.target.value)} placeholder="Club, deporte o barrio" aria-label="Buscar en el mapa" /></label>
+            <label className="map-area-field"><MapPin size={18} /><select value={selectedArea} onChange={(event) => { setSelectedArea(event.target.value); setFocused(null); }} aria-label="Filtrar por barrio"><option value="">Todos los barrios</option>{areas.map((area) => <option value={area} key={area}>{area}</option>)}</select></label>
+            <div className="map-sport-filters" aria-label="Filtrar por deporte"><button className={!selectedSport ? "active" : ""} aria-pressed={!selectedSport} onClick={() => { setSelectedSport(""); setFocused(null); }}>Todos</button>{mapSports.map((sport) => <button key={sport} className={selectedSport === sport ? "active" : ""} aria-pressed={selectedSport === sport} onClick={() => { setSelectedSport(sport); setFocused(null); }}>{sport}</button>)}</div>
+          </div>
+          <div className="map-list-heading"><strong>{visiblePoints.length} {visiblePoints.length === 1 ? "resultado" : "resultados"}</strong><span>Elegí un club para ubicarlo</span></div>
+          <div className="map-results">
+            {visiblePoints.length === 0 && <div className="map-no-results"><Compass size={27} /><strong>No encontramos clubes con esos filtros.</strong><button onClick={clearMapFilters}>Ver todos los clubes</button></div>}
+            {visiblePoints.map((profile) => (
+              <button key={profile.id} className={`map-result ${selected?.id === profile.id ? "selected" : ""}`} onClick={() => setFocused(profile)} aria-pressed={selected?.id === profile.id}>
+                <img src={profile.imageUrl || "/images/sports/running.jpg"} alt="" loading="lazy" />
+                <span><strong>{profile.name}</strong><small><MapPin size={13} />{profile.neighborhood || profile.city}</small><em>{profile.sports?.slice(0, 2).join(" · ") || categoryLabel(profile.category)}</em></span>
+                <ArrowUpRight size={17} />
               </button>
             ))}
-            {focused && <button className="map-view-detail" onClick={() => onOpen(focused)}>Ver ficha de {focused.name} <ArrowUpRight size={16} /></button>}
           </div>
-        </div>
-      )}
+        </aside>
+      </div>
       <div className="map-caption">
-        <MapPin size={17} /> {googleMapsKey ? `${points.length} ubicaciones en el mapa` : `${points.length} clubes en el directorio · elegí uno para verlo en Google Maps`}{" "}
+        <MapPin size={17} /> {googleMapsKey ? "Los marcadores muestran todos los resultados filtrados." : "Elegí un club del listado para ubicarlo en Google Maps."}{" "}
         <span>Mapa: Google Maps</span>
       </div>
     </div>

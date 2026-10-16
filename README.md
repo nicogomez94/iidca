@@ -4,7 +4,7 @@ Aplicación responsive para acercar personas a oportunidades deportivas. Su tono
 
 ## Funciones
 
-- Inicio con fotografías de personas practicando deporte y navegación accesible en celular y escritorio.
+- Inicio con fotografías de personas practicando deporte, transiciones respetuosas de la preferencia de movimiento reducido y tres historias de muestra con imágenes y créditos.
 - Directorio con búsqueda por deporte, ubicación y categoría, vista de listado y Google Maps, geolocalización opcional y fichas con actividades, dirección, fuente y estado de verificación.
 - Padrón inicial de 310 clubes reales obtenido de [Buenos Aires Data · Clubes](https://data.buenosaires.gob.ar/es_AR/dataset/clubes). La importación es repetible, registra procedencia y fecha, y evita duplicados por identificador de fuente o nombre y dirección.
 - Imágenes de sedes reales para clubes destacados y fotografías del deporte correspondiente para el resto. [Créditos y licencias](public/creditos-fotos.html) se generan con `npm run build` a partir de `data/image-credits.json`.
@@ -29,7 +29,9 @@ Para crear un administrador fuera del modo demo, agregar temporalmente `ADMIN_EM
 
 ## Google Maps
 
-Con `VITE_GOOGLE_MAPS_API_KEY` configurada, la vista mapa muestra los marcadores de todas las fichas con coordenadas y permite elegir puntos sobre el mapa. La clave necesita la API de Maps JavaScript habilitada y las restricciones de origen adecuadas. Sin clave, la app usa **Google Maps embebido**: se selecciona una ficha del directorio para verla en el mapa; al crear una ficha se pueden ingresar las coordenadas tomadas de Google Maps. Las indicaciones siempre abren Google Maps. El mapa embebido no muestra simultáneamente todos los marcadores propios.
+La vista mapa tiene búsqueda por nombre, deporte o barrio, filtros rápidos de actividad, fotos de los clubes y una ficha seleccionada. Con `VITE_GOOGLE_MAPS_API_KEY` configurada, muestra simultáneamente los marcadores de todos los resultados filtrados. Sin clave, usa **Google Maps embebido**: el listado y los filtros funcionan, y cada club se puede ubicar al seleccionarlo; ese mapa embebido no puede dibujar simultáneamente todos los marcadores propios. Las indicaciones siempre abren Google Maps.
+
+Para activar los marcadores múltiples: crear una clave para **Maps JavaScript API** en Google Cloud, habilitar facturación y restringir la clave por **sitios web** (`https://149.34.224.87/*` para esta instalación) y por API (Maps JavaScript API). Guardar `VITE_GOOGLE_MAPS_API_KEY=...` en `/var/www/sites/iidca-social-club/shared/app.env` de `hosting` y volver a ejecutar `bash scripts/deploy-hosting.sh`. Vite incorpora la clave pública al frontend durante la compilación: las restricciones de Google Cloud son necesarias. Si Google rechaza el origen, revisar el referrer indicado en la consola del navegador.
 
 ## Producción y publicación
 

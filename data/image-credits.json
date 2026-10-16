@@ -160,5 +160,32 @@
     "license": "CC BY-SA 4.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
     "attribution": ""
+  },
+  "editorial-fitness": {
+    "path": "/images/editorial/fitness-class.jpg",
+    "title": "Clase de ejercicio en grupo",
+    "source": "https://unsplash.com/photos/group-of-people-in-gym-while-exercising-3RnkZpDqsEI",
+    "author": "Geert Pieters",
+    "license": "Unsplash License",
+    "licenseUrl": "https://unsplash.com/license",
+    "attribution": ""
+  },
+  "editorial-park": {
+    "path": "/images/editorial/park-exercise.jpg",
+    "title": "Grupo de mujeres ejercitándose en un parque",
+    "source": "https://unsplash.com/photos/group-of-women-exercising-together-in-a-park-YFzKE1P6l80",
+    "author": "Khanh Do",
+    "license": "Unsplash License",
+    "licenseUrl": "https://unsplash.com/license",
+    "attribution": ""
+  },
+  "editorial-yoga": {
+    "path": "/images/editorial/yoga-class.jpg",
+    "title": "Clase grupal de yoga",
+    "source": "https://unsplash.com/photos/a-group-of-people-doing-yoga-in-a-room-mICiQI-75wE",
+    "author": "Alpesh Patwari",
+    "license": "Unsplash License",
+    "licenseUrl": "https://unsplash.com/license",
+    "attribution": ""
   }
 }
