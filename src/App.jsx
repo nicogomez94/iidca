@@ -1893,7 +1893,7 @@ function MemberProfile({ user, onUpdate, onExplore }) {
   );
 }
 
-function Admin({ user, onAuth }) {
+function Admin({ user, onAuth, onLogout, onNavigate }) {
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
@@ -1903,6 +1903,8 @@ function Admin({ user, onAuth }) {
   const [page, setPage] = useState(1);
   const [claimPage, setClaimPage] = useState(1);
   const [editing, setEditing] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("resumen");
   const load = () =>
     api("/admin/overview")
       .then(setOverview)
@@ -1963,11 +1965,14 @@ function Admin({ user, onAuth }) {
   };
   if (user?.role !== "ADMIN")
     return (
-      <main className="container dashboard-page">
-        <div className="empty-state">
+      <main className="admin-login-screen">
+        <div className="admin-login-card">
+          <div className="admin-login-brand"><img src={logo} alt="" /><span>IIDCA <small>ADMINISTRACIÓN</small></span></div>
           <LockKeyhole />
           <h2>{user ? "Acceso restringido" : "Administración IIDCA"}</h2>
+          <p>{user ? "Esta cuenta no tiene acceso al panel administrativo." : "Ingresá para gestionar los perfiles y reclamos de la comunidad."}</p>
           {!user && <button className="button button-primary" onClick={() => onAuth("admin")}>Ingresar al panel</button>}
+          <button className="admin-login-back" onClick={() => onNavigate("home")}><ArrowLeft size={16} /> Volver al sitio</button>
         </div>
       </main>
     );
@@ -1988,16 +1993,33 @@ function Admin({ user, onAuth }) {
   const claims = overview?.claims || [];
   const claimPageCount = Math.max(1, Math.ceil(claims.length / 5));
   const currentClaimPage = Math.min(claimPage, claimPageCount);
+  const goToSection = (section) => {
+    setActiveSection(section);
+    setSidebarOpen(false);
+    document.getElementById(`admin-${section}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   return (
-    <main className="dashboard-page admin-page">
-      <div className="container dashboard-container">
-        <div className="dashboard-intro">
-          <div className="eyebrow eyebrow-blue">PANEL ADMINISTRATIVO</div>
-          <h1>
-            La comunidad, <em>de cerca.</em>
-          </h1>
-          <p>Revisá clubes, reclamaciones y datos de contacto para el trabajo de IIDCA.</p>
+    <main className="admin-shell">
+      {sidebarOpen && <button className="admin-sidebar-scrim" aria-label="Cerrar menú" onClick={() => setSidebarOpen(false)} />}
+      <aside className={`admin-sidebar ${sidebarOpen ? "is-open" : ""}`}>
+        <div className="admin-sidebar-brand"><img src={logo} alt="" /><div><strong>IIDCA</strong><span>PANEL DE GESTIÓN</span></div></div>
+        <div className="admin-sidebar-label">ESPACIO DE TRABAJO</div>
+        <nav className="admin-sidebar-nav" aria-label="Menú de administración">
+          <button className={activeSection === "resumen" ? "active" : ""} onClick={() => goToSection("resumen")}><Compass size={19} /> Resumen</button>
+          <button className={activeSection === "reclamos" ? "active" : ""} onClick={() => goToSection("reclamos")}><BadgeCheck size={19} /> Reclamos <span>{claims.length}</span></button>
+          <button className={activeSection === "perfiles" ? "active" : ""} onClick={() => goToSection("perfiles")}><Users size={19} /> Perfiles <span>{overview?.profiles.length ?? "—"}</span></button>
+          <button className={activeSection === "exportaciones" ? "active" : ""} onClick={() => goToSection("exportaciones")}><ArrowDownRight size={19} /> Exportaciones</button>
+        </nav>
+        <div className="admin-sidebar-bottom">
+          <div className="admin-sidebar-account"><span>{user.email?.slice(0, 1).toUpperCase() || "A"}</span><div><strong>Administración</strong><small>{user.email}</small></div></div>
+          <button onClick={() => onNavigate("home")}><ExternalLink size={17} /> Ver sitio público</button>
+          <button onClick={onLogout}><LogIn size={17} /> Cerrar sesión</button>
         </div>
+      </aside>
+      <div className="admin-main">
+        <div className="admin-topbar"><button className="admin-menu-toggle" aria-label="Abrir menú de administración" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)}><Menu size={23} /></button><span>Administración <span>/</span> IIDCA Social Club</span><span className="admin-topbar-status"><i /> Panel activo</span></div>
+        <div className="admin-content" id="admin-resumen">
+          <div className="admin-heading"><div><span>VISTA GENERAL</span><h1>Resumen</h1><p>Gestioná perfiles, reclamos y datos desde un solo lugar.</p></div><span className="admin-heading-date">{new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long", year: "numeric" }).format(new Date())}</span></div>
         {error && (
           <div className="feedback error" role="alert">
             {error}
@@ -2020,7 +2042,7 @@ function Admin({ user, onAuth }) {
             <ShieldCheck size={25} />
           </div>
         </div>
-        <section className="dashboard-card admin-tools">
+        <section className="dashboard-card admin-tools" id="admin-exportaciones">
           <div>
             <h2>Padrón privado</h2>
             <p>Los datos completos y las exportaciones son exclusivos para administración.</p>
@@ -2030,7 +2052,7 @@ function Admin({ user, onAuth }) {
             <button className="button button-outline" onClick={() => downloadExport("pdf")}>Descargar PDF</button>
           </div>
         </section>
-        <section className="dashboard-card admin-claims">
+        <section className="dashboard-card admin-claims" id="admin-reclamos">
           <div className="admin-list-heading"><h2>Reclamos por verificar</h2><span>{overview?.claims?.length || 0} pendientes</span></div>
           {claims.length ? claims.slice((currentClaimPage - 1) * 5, currentClaimPage * 5).map((claim) => (
             <article className="admin-claim" key={claim.id}>
@@ -2040,7 +2062,7 @@ function Admin({ user, onAuth }) {
           )) : <p>No hay reclamos pendientes.</p>}
           {claimPageCount > 1 && <div className="admin-pagination"><span>Página {currentClaimPage} de {claimPageCount}</span><div><button disabled={currentClaimPage === 1} onClick={() => setClaimPage(currentClaimPage - 1)}>Anterior</button><button disabled={currentClaimPage === claimPageCount} onClick={() => setClaimPage(currentClaimPage + 1)}>Siguiente</button></div></div>}
         </section>
-        <section className="dashboard-card admin-list">
+        <section className="dashboard-card admin-list" id="admin-perfiles">
           <div className="admin-list-heading">
             <h2>Perfiles de la plataforma</h2>
             <span>{visibleProfiles.length} de {overview?.profiles.length || 0} registros</span>
@@ -2113,6 +2135,7 @@ function Admin({ user, onAuth }) {
             <button className="button button-primary" disabled={busy === editing.id}>Guardar cambios</button>
           </form>
         </div>}
+        </div>
       </div>
     </main>
   );
@@ -2242,13 +2265,13 @@ export default function App() {
 
   return (
     <>
-      <Header
+      {view !== "admin" && <Header
         view={view}
         onNavigate={navigate}
         onAuth={setAuthMode}
         user={user}
         onLogout={logout}
-      />
+      />}
       {view === "home" && (
         <Home onSearch={search} onNavigate={navigate} onAuth={setAuthMode} />
       )}
@@ -2283,8 +2306,8 @@ export default function App() {
             </div>
           </main>
         ))}
-      {view === "admin" && <Admin user={user} onAuth={setAuthMode} />}
-      <Footer onNavigate={navigate} onAuth={setAuthMode} />
+      {view === "admin" && <Admin user={user} onAuth={setAuthMode} onLogout={logout} onNavigate={navigate} />}
+      {view !== "admin" && <Footer onNavigate={navigate} onAuth={setAuthMode} />}
       <AuthModal
         key={authMode || "closed"}
         mode={authMode}
