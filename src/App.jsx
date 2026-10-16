@@ -111,7 +111,7 @@ function Header({ view, onNavigate, onAuth, user, onLogout }) {
           <button onClick={() => go("home", "proposito")}>
             Nuestro propósito
           </button>
-          <button onClick={() => go("home", "novedades")}>
+          <button className={view === "news" || view === "article" ? "active" : ""} onClick={() => go("news")}>
             Novedades
           </button>
           <div className="mobile-nav-actions">
@@ -327,7 +327,7 @@ function HeroGraphic() {
   );
 }
 
-function Home({ onSearch, onNavigate, onAuth }) {
+function Home({ onSearch, onNavigate, onAuth, articles }) {
   useEffect(() => {
     const elements = document.querySelectorAll("[data-reveal]");
     if (!("IntersectionObserver" in window)) {
@@ -343,34 +343,8 @@ function Home({ onSearch, onNavigate, onAuth }) {
     }, { threshold: 0.12, rootMargin: "0px 0px -25px 0px" });
     elements.forEach((element) => observer.observe(element));
     return () => observer.disconnect();
-  }, []);
+  }, [articles]);
 
-  const stories = [
-    {
-      image: "/images/editorial/fitness-class.jpg",
-      alt: "Personas ejercitándose juntas en una clase de gimnasio",
-      category: "ENTRENAR EN COMPAÑÍA",
-      title: "Una clase puede ser el comienzo de un gran grupo.",
-      description: "Moverse con otras personas cambia la energía de cada entrenamiento.",
-      sport: "Gimnasia",
-    },
-    {
-      image: "/images/editorial/park-exercise.jpg",
-      alt: "Grupo de mujeres haciendo actividad física al aire libre",
-      category: "AIRE LIBRE",
-      title: "El barrio también puede ser tu lugar para moverte.",
-      description: "Una plaza, una actividad y la excusa perfecta para encontrarse.",
-      sport: "",
-    },
-    {
-      image: "/images/editorial/yoga-class.jpg",
-      alt: "Personas practicando yoga en una clase grupal",
-      category: "BIENESTAR",
-      title: "Empezar yoga se disfruta más cuando no estás solo.",
-      description: "Hay espacios cercanos para probar, aprender y volver a elegirte.",
-      sport: "Yoga",
-    },
-  ];
   return (
     <main>
       <section className="hero-section">
@@ -445,26 +419,26 @@ function Home({ onSearch, onNavigate, onAuth }) {
               <div className="eyebrow eyebrow-blue">UN POCO DE INSPIRACIÓN</div>
               <h2 id="news-title">Historias para <em>poner el cuerpo</em> en movimiento.</h2>
             </div>
-            <p>Ideas para imaginar todo lo que puede pasar cuando encontrás un lugar para empezar. <strong>Historias de muestra.</strong></p>
+            <p>Ideas y novedades para encontrar nuevas formas de moverte cerca de casa.</p>
           </div>
           <div className="news-grid">
-            {stories.map((story, index) => (
-              <article className={`news-card news-card-${index + 1}`} key={story.title} data-reveal>
+            {articles.slice(0, 3).map((story, index) => (
+              <article className={`news-card news-card-${index + 1}`} key={story.id} data-reveal>
                 <div className="news-image">
-                  <img src={story.image} alt={story.alt} loading="lazy" />
-                  <span>HISTORIA DE MUESTRA</span>
+                  <img src={story.imageUrl} alt={story.imageAlt} loading="lazy" />
                 </div>
                 <div className="news-content">
                   <span className="news-category">{story.category}</span>
                   <h3>{story.title}</h3>
-                  <p>{story.description}</p>
-                  <button onClick={() => onSearch({ ...defaultFilters, sport: story.sport })}>
-                    Explorar actividades <ArrowUpRight size={18} />
+                  <p>{story.excerpt}</p>
+                  <button onClick={() => onNavigate("article", story.slug)}>
+                    Leer novedad <ArrowUpRight size={18} />
                   </button>
                 </div>
               </article>
             ))}
           </div>
+          <button className="news-all-link" onClick={() => onNavigate("news")}>Ver todas las novedades <ArrowRight size={18} /></button>
         </div>
       </section>
 
@@ -574,6 +548,33 @@ function Home({ onSearch, onNavigate, onAuth }) {
       <ContactSection />
     </main>
   );
+}
+
+function NewsPage({ articles, loading, error, onNavigate }) {
+  return <main className="news-page">
+    <section className="news-page-intro"><div className="container"><div className="eyebrow eyebrow-blue"><span className="eyebrow-dot" /> NOVEDADES IIDCA</div><h1>Historias para seguir <em>en movimiento.</em></h1><p>Ideas, experiencias y actividades para acercarte al deporte.</p></div></section>
+    <section className="news-page-list container" aria-label="Todas las novedades">
+      {loading && <p>Cargando novedades...</p>}
+      {error && <p className="feedback error" role="alert">{error}</p>}
+      {!loading && !error && !articles.length && <div className="empty-state"><h2>Pronto habrá novedades.</h2><p>Volvé a visitarnos para conocer nuevas historias.</p></div>}
+      {articles.map((article) => <article className="news-list-card" key={article.id}>
+        <button className="news-list-image" onClick={() => onNavigate("article", article.slug)} aria-label={`Leer ${article.title}`}><img src={article.imageUrl} alt={article.imageAlt} loading="lazy" /></button>
+        <div><span className="news-category">{article.category}</span><h2>{article.title}</h2><p>{article.excerpt}</p><button className="news-read-link" onClick={() => onNavigate("article", article.slug)}>Leer novedad <ArrowUpRight size={18} /></button></div>
+      </article>)}
+    </section>
+  </main>;
+}
+
+function NewsArticle({ article, loading, onNavigate }) {
+  if (loading) return <main className="news-article-page container"><p>Cargando novedad...</p></main>;
+  if (!article) return <main className="news-article-page container"><div className="empty-state"><h1>No encontramos esa novedad.</h1><button className="button button-primary" onClick={() => onNavigate("news")}>Ver novedades</button></div></main>;
+  return <main className="news-article-page">
+    <div className="container"><button className="news-back" onClick={() => onNavigate("news")}><ArrowLeft size={18} /> Todas las novedades</button>
+      <div className="news-article-heading"><span className="news-category">{article.category}</span><h1>{article.title}</h1><p>{article.excerpt}</p></div>
+      <img className="news-article-image" src={article.imageUrl} alt={article.imageAlt} />
+      <div className="news-article-body">{article.body.split(/\n\s*\n/).filter(Boolean).map((paragraph, index) => <p key={index}>{paragraph}</p>)}<button className="button button-primary" onClick={() => onNavigate("explore")}>Explorar opciones <ArrowUpRight size={18} /></button></div>
+    </div>
+  </main>;
 }
 
 function ContactSection() {
@@ -832,7 +833,7 @@ function LocationPicker({ latitude, longitude, onChoose }) {
 }
 
 function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
-  const [layout, setLayout] = useState("list");
+  const [layout, setLayout] = useState("map");
   return (
     <main className="explore-page">
       <section className="explore-intro">
@@ -843,10 +844,7 @@ function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
           <h1>
             Encontrá tu próximo <em>lugar.</em>
           </h1>
-          <p>
-            Opciones reales para moverte, conectar y hacer del deporte parte de
-            tu vida.
-          </p>
+          <p>Explorá clubes y actividades cerca tuyo.</p>
           <SearchForm initial={filters} onSearch={onSearch} compact />
         </div>
       </section>
@@ -1305,6 +1303,7 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
               {error && (
                 <div className="feedback error" role="alert">
                   {error}
+                  {mode === "login" && error.includes("acceso de administración") && <button type="button" className="auth-admin-link" onClick={() => onMode("admin")}>Abrir acceso administrador <ArrowRight size={16} /></button>}
                 </div>
               )}
               <button
@@ -1893,8 +1892,61 @@ function MemberProfile({ user, onUpdate, onExplore }) {
   );
 }
 
+const emptyNewsDraft = { title: "", excerpt: "", body: "", category: "", imageUrl: "/images/editorial/fitness-class.jpg", imageAlt: "", published: false };
+
+function AdminNews() {
+  const [articles, setArticles] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
+  const load = () => api("/admin/news").then((data) => setArticles(data.articles)).catch((issue) => setError(issue.message));
+  useEffect(() => { load(); }, []);
+  const save = async (event) => {
+    event.preventDefault(); setBusy(true); setError("");
+    try {
+      await api(editing.id ? `/admin/news/${editing.id}` : "/admin/news", { method: editing.id ? "PATCH" : "POST", body: JSON.stringify(editing) });
+      setEditing(null); await load();
+    } catch (issue) { setError(issue.message); }
+    finally { setBusy(false); }
+  };
+  const togglePublished = async (article) => {
+    setBusy(true); setError("");
+    try { await api(`/admin/news/${article.id}`, { method: "PATCH", body: JSON.stringify({ ...article, published: !article.published }) }); await load(); }
+    catch (issue) { setError(issue.message); }
+    finally { setBusy(false); }
+  };
+  const remove = async (id) => {
+    setBusy(true); setError("");
+    try { await api(`/admin/news/${id}`, { method: "DELETE" }); setDeleteId(null); await load(); }
+    catch (issue) { setError(issue.message); }
+    finally { setBusy(false); }
+  };
+  return <div className="admin-news-layout">
+    <div className="admin-news-toolbar"><span>{articles.length} novedades · {articles.filter((article) => article.published).length} publicadas</span><button className="button button-primary" onClick={() => setEditing({ ...emptyNewsDraft })}>Nueva novedad <ArrowRight size={17} /></button></div>
+    {error && <p className="feedback error" role="alert">{error}</p>}
+    {editing && <form className="dashboard-card admin-news-form" onSubmit={save}>
+      <div className="admin-list-heading"><h2>{editing.id ? "Editar novedad" : "Nueva novedad"}</h2><button type="button" className="admin-news-cancel" onClick={() => setEditing(null)}>Cancelar</button></div>
+      <div className="admin-news-form-grid">
+        <label className="admin-news-wide">Título<input required maxLength={140} value={editing.title} onChange={(event) => setEditing({ ...editing, title: event.target.value })} /></label>
+        <label>Categoría<input required maxLength={55} value={editing.category} onChange={(event) => setEditing({ ...editing, category: event.target.value })} placeholder="Ej. VIDA ACTIVA" /></label>
+        <label>Foto<select value={["/images/editorial/fitness-class.jpg", "/images/editorial/park-exercise.jpg", "/images/editorial/yoga-class.jpg"].includes(editing.imageUrl) ? editing.imageUrl : "custom"} onChange={(event) => setEditing({ ...editing, imageUrl: event.target.value === "custom" ? "" : event.target.value })}><option value="/images/editorial/fitness-class.jpg">Clase de gimnasia</option><option value="/images/editorial/park-exercise.jpg">Actividad en parque</option><option value="/images/editorial/yoga-class.jpg">Clase de yoga</option><option value="custom">Otra URL HTTPS</option></select></label>
+        <label className="admin-news-wide">URL de la foto<input required value={editing.imageUrl} onChange={(event) => setEditing({ ...editing, imageUrl: event.target.value })} placeholder="https://..." /></label>
+        <label className="admin-news-wide">Descripción de la foto<input required maxLength={180} value={editing.imageAlt} onChange={(event) => setEditing({ ...editing, imageAlt: event.target.value })} /></label>
+        <label className="admin-news-wide">Resumen<input required maxLength={320} value={editing.excerpt} onChange={(event) => setEditing({ ...editing, excerpt: event.target.value })} /></label>
+        <label className="admin-news-wide">Contenido<textarea required rows={8} value={editing.body} onChange={(event) => setEditing({ ...editing, body: event.target.value })} placeholder="Separá los párrafos con una línea en blanco." /></label>
+      </div>
+      <div className="admin-news-form-bottom"><label><input type="checkbox" checked={editing.published} onChange={(event) => setEditing({ ...editing, published: event.target.checked })} /> Publicar en el sitio</label><button className="button button-primary" disabled={busy}>Guardar novedad</button></div>
+    </form>}
+    <div className="admin-news-list">{articles.map((article) => <article className="dashboard-card admin-news-item" key={article.id}>
+      <img src={article.imageUrl} alt={article.imageAlt} /><div><span className="news-category">{article.category}</span><h2>{article.title}</h2><p>{article.excerpt}</p><span className={`status-badge ${article.published ? "status-published" : "status-hidden"}`}>{article.published ? "Publicada" : "Borrador"}</span></div>
+      <div className="admin-news-actions"><button disabled={busy} onClick={() => setEditing({ ...article })}>Editar</button><button disabled={busy} onClick={() => togglePublished(article)}>{article.published ? "Ocultar" : "Publicar"}</button>{deleteId === article.id ? <><button disabled={busy} onClick={() => remove(article.id)}>Confirmar eliminación</button><button onClick={() => setDeleteId(null)}>Cancelar</button></> : <button onClick={() => setDeleteId(article.id)}>Eliminar</button>}</div>
+    </article>)}</div>
+  </div>;
+}
+
 function Admin({ user, onAuth, onLogout, onNavigate }) {
-  const sectionFromPath = () => ({ "/admin/reclamos": "reclamos", "/admin/perfiles": "perfiles" })[window.location.pathname] || "resumen";
+  const sectionFromPath = () => ({ "/admin/reclamos": "reclamos", "/admin/perfiles": "perfiles", "/admin/novedades": "novedades" })[window.location.pathname] || "resumen";
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
@@ -1979,8 +2031,8 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
           <div className="admin-login-brand"><img src={logo} alt="" /><span>IIDCA <small>ADMINISTRACIÓN</small></span></div>
           <LockKeyhole />
           <h2>{user ? "Acceso restringido" : "Administración IIDCA"}</h2>
-          <p>{user ? "Esta cuenta no tiene acceso al panel administrativo." : "Ingresá para gestionar los perfiles y reclamos de la comunidad."}</p>
-          {!user && <button className="button button-primary" onClick={() => onAuth("admin")}>Ingresar al panel</button>}
+          <p>{user ? `Hay una sesión abierta con ${user.email}. Ingresá con la cuenta administradora para cambiar de usuario.` : "Ingresá para gestionar los perfiles y reclamos de la comunidad."}</p>
+          <button className="button button-primary" onClick={() => onAuth("admin")}>{user ? "Cambiar a administrador" : "Ingresar al panel"}</button>
           <button className="admin-login-back" onClick={() => onNavigate("home")}><ArrowLeft size={16} /> Volver al sitio</button>
         </div>
       </main>
@@ -2021,6 +2073,7 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
           <button className={activeSection === "resumen" ? "active" : ""} onClick={() => goToSection("resumen")}><Compass size={19} /> Resumen</button>
           <button className={activeSection === "reclamos" ? "active" : ""} onClick={() => goToSection("reclamos")}><BadgeCheck size={19} /> Reclamos <span>{claims.length}</span></button>
           <button className={activeSection === "perfiles" ? "active" : ""} onClick={() => goToSection("perfiles")}><Users size={19} /> Perfiles <span>{overview?.profiles.length ?? "—"}</span></button>
+          <button className={activeSection === "novedades" ? "active" : ""} onClick={() => goToSection("novedades")}><Sparkles size={19} /> Novedades</button>
         </nav>
         <div className="admin-sidebar-bottom">
           <div className="admin-sidebar-account"><span>{user.email?.slice(0, 1).toUpperCase() || "A"}</span><div><strong>Administración</strong><small>{user.email}</small></div></div>
@@ -2031,7 +2084,7 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
       <div className="admin-main">
         <div className="admin-topbar"><button className="admin-menu-toggle" aria-label="Abrir menú de administración" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)}><Menu size={23} /></button><span>Administración <span>/</span> IIDCA Social Club</span><span className="admin-topbar-status"><i /> Panel activo</span></div>
         <div className="admin-content">
-          <div className="admin-heading"><div><span>PANEL DE GESTIÓN</span><h1>{activeSection === "resumen" ? "Resumen" : activeSection === "reclamos" ? "Reclamos" : "Perfiles"}</h1><p>{activeSection === "resumen" ? "Una mirada rápida a la comunidad." : activeSection === "reclamos" ? "Revisá las solicitudes de vinculación pendientes." : "Administrá las fichas y descargá el padrón con filtros."}</p></div><span className="admin-heading-date">{new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long", year: "numeric" }).format(new Date())}</span></div>
+          <div className="admin-heading"><div><span>PANEL DE GESTIÓN</span><h1>{({ resumen: "Resumen", reclamos: "Reclamos", perfiles: "Perfiles", novedades: "Novedades" })[activeSection]}</h1><p>{({ resumen: "Una mirada rápida a la comunidad.", reclamos: "Revisá las solicitudes de vinculación pendientes.", perfiles: "Administrá las fichas y descargá el padrón con filtros.", novedades: "Creá y publicá las historias que aparecen en el sitio." })[activeSection]}</p></div><span className="admin-heading-date">{new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long", year: "numeric" }).format(new Date())}</span></div>
         {error && (
           <div className="feedback error" role="alert">
             {error}
@@ -2141,6 +2194,7 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
           )}
           {overview && pageCount > 1 && <div className="admin-pagination"><span>Mostrando {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, visibleProfiles.length)} de {visibleProfiles.length} · página {currentPage} de {pageCount}</span><div><button disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Anterior</button><button disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>Siguiente</button></div></div>}
         </section>}
+        {activeSection === "novedades" && <AdminNews />}
         {editing && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setEditing(null)}>
           <form className="admin-edit-modal" onSubmit={saveEdit} role="dialog" aria-modal="true" aria-label={`Editar ${editing.name}`}>
             <button type="button" className="modal-close" onClick={() => setEditing(null)} aria-label="Cerrar"><X /></button>
@@ -2175,6 +2229,7 @@ function Footer({ onNavigate, onAuth }) {
           <button onClick={() => onNavigate("home", "proposito")}>
             Nuestro propósito
           </button>
+          <button onClick={() => onNavigate("news")}>Novedades</button>
         </div>
         <div className="footer-links">
           <strong>Participá</strong>
@@ -2205,7 +2260,7 @@ function Footer({ onNavigate, onAuth }) {
 
 export default function App() {
   const routeFromHash = () =>
-    (window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/")) ? "admin" : ({
+    (window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/")) ? "admin" : window.location.pathname.startsWith("/novedades/") ? "article" : window.location.pathname === "/novedades" ? "news" : ({
       "#explorar": "explore",
       "#mi-espacio": "profile",
     })[window.location.hash] || "home";
@@ -2217,10 +2272,16 @@ export default function App() {
   const [directoryLoading, setDirectoryLoading] = useState(true);
   const [directoryError, setDirectoryError] = useState("");
   const [selectedProfile, setSelectedProfile] = useState(null);
+  const [articles, setArticles] = useState([]);
+  const [newsLoading, setNewsLoading] = useState(true);
+  const [newsError, setNewsError] = useState("");
 
   useEffect(() => {
     api("/me")
-      .then((data) => setUser(data.user))
+      .then((data) => {
+        setUser(data.user);
+        if ((window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/")) && data.user.role !== "ADMIN") setAuthMode("admin");
+      })
       .catch(() => {
         if (window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/")) setAuthMode("admin");
       });
@@ -2237,6 +2298,11 @@ export default function App() {
       .finally(() => setDirectoryLoading(false));
   }, [filters]);
   useEffect(() => {
+    if (!["home", "news", "article"].includes(view)) return;
+    setNewsLoading(true);
+    api("/news").then((data) => { setArticles(data.articles); setNewsError(""); }).catch((issue) => setNewsError(issue.message)).finally(() => setNewsLoading(false));
+  }, [view]);
+  useEffect(() => {
     const onHash = () => setView(routeFromHash());
     window.addEventListener("hashchange", onHash);
     window.addEventListener("popstate", onHash);
@@ -2252,9 +2318,9 @@ export default function App() {
       explore: "explorar",
       profile: "mi-espacio",
     };
-    window.history.pushState(null, "", next === "admin" ? "/admin" : next === "home" ? "/" : `/#${hashes[next]}`);
+    window.history.pushState(null, "", next === "admin" ? "/admin" : next === "news" ? "/novedades" : next === "article" ? `/novedades/${encodeURIComponent(anchor)}` : next === "home" ? "/" : `/#${hashes[next]}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
-    if (anchor)
+    if (anchor && next === "home")
       window.setTimeout(
         () =>
           document
@@ -2288,8 +2354,10 @@ export default function App() {
         onLogout={logout}
       />}
       {view === "home" && (
-        <Home onSearch={search} onNavigate={navigate} onAuth={setAuthMode} />
+        <Home onSearch={search} onNavigate={navigate} onAuth={setAuthMode} articles={articles} />
       )}
+      {view === "news" && <NewsPage articles={articles} loading={newsLoading} error={newsError} onNavigate={navigate} />}
+      {view === "article" && <NewsArticle article={articles.find((item) => item.slug === decodeURIComponent(window.location.pathname.split("/")[2] || ""))} loading={newsLoading} onNavigate={navigate} />}
       {view === "explore" && (
         <Explore
           filters={filters}

@@ -70,6 +70,42 @@ const oldExampleNames = [
 ];
 
 try {
+  const starterNews = [
+    {
+      slug: "empezar-a-entrenar-en-compania",
+      title: "Una clase puede ser el comienzo de un gran grupo",
+      excerpt: "Moverse con otras personas cambia la energía de cada entrenamiento.",
+      body: "Elegir una actividad cerca de casa puede ser el primer paso. No hace falta llegar sabiendo todo: en muchos espacios hay propuestas para empezar de a poco y aprender con otras personas.\n\nCuando entrenar se vuelve un encuentro, también aparecen nuevas razones para volver. Explorá el directorio, conocé las opciones de tu barrio y preguntá por una clase de prueba.",
+      category: "ENTRENAR EN COMPAÑÍA",
+      imageUrl: "/images/editorial/fitness-class.jpg",
+      imageAlt: "Personas ejercitándose juntas en una clase de gimnasio",
+    },
+    {
+      slug: "el-barrio-tambien-se-mueve",
+      title: "El barrio también puede ser tu lugar para moverte",
+      excerpt: "Una plaza, una actividad y la excusa perfecta para encontrarse.",
+      body: "Hay actividades que empiezan a pocas cuadras de casa. Una caminata, un entrenamiento al aire libre o una propuesta de un club pueden ayudarte a descubrir una rutina que se adapte a vos.\n\nBuscá por zona en IIDCA Social Club y compará las opciones disponibles. El mejor lugar para empezar suele ser uno al que te resulte fácil volver.",
+      category: "AIRE LIBRE",
+      imageUrl: "/images/editorial/park-exercise.jpg",
+      imageAlt: "Grupo de personas haciendo actividad física al aire libre",
+    },
+    {
+      slug: "yoga-para-compartir",
+      title: "Empezar yoga se disfruta más cuando no estás solo",
+      excerpt: "Hay espacios cercanos para probar, aprender y volver a elegirte.",
+      body: "Una clase de yoga puede ser un momento para bajar el ritmo y conectar con el cuerpo. Cada espacio tiene su forma de enseñar, así que vale la pena preguntar por niveles, horarios y modalidades.\n\nEn el directorio podés encontrar clubes y profesionales que ofrecen actividades de bienestar. Elegí una propuesta que te quede cómoda y animate a probar.",
+      category: "BIENESTAR",
+      imageUrl: "/images/editorial/yoga-class.jpg",
+      imageAlt: "Personas practicando yoga en una clase grupal",
+    },
+  ];
+  for (const article of starterNews) {
+    await prisma.newsArticle.upsert({
+      where: { slug: article.slug },
+      update: {},
+      create: { ...article, published: true, publishedAt: new Date() },
+    });
+  }
   if (process.env.DEMO_MODE === "true") {
     const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 12);
     await prisma.user.upsert({
