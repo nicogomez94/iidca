@@ -9,8 +9,6 @@ import helmet from "helmet";
 import jwt from "jsonwebtoken";
 import { PrismaClient } from "@prisma/client";
 import rateLimit from "express-rate-limit";
-import { authenticator } from "otplib";
-import QRCode from "qrcode";
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 
@@ -20,6 +18,7 @@ const prisma = new PrismaClient();
 const port = Number(process.env.PORT || 4000);
 const host = process.env.HOST || '127.0.0.1';
 const tokenName = "iidca_session";
+const demoMode = process.env.DEMO_MODE === "true";
 const publicRoles = ["PROFESSIONAL", "CLUB", "FEDERATION", "SPONSOR"];
 const allowedRoles = ["ATHLETE", ...publicRoles];
 const profileFields = [
@@ -51,32 +50,21 @@ app.use(cookieParser());
 app.use((req, res, next) => {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
   const origin = req.get("Origin");
-  if (origin && origin !== `${req.protocol}://${req.get("host")}`)
+  const allowedOrigins = [`${req.protocol}://${req.get("host")}`];
+  if (process.env.NODE_ENV !== "production") allowedOrigins.push("http://127.0.0.1:5173", "http://localhost:5173");
+  if (origin && !allowedOrigins.includes(origin))
     return res.status(403).json({ error: "Origen de solicitud no permitido." });
   next();
 });
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Demasiados intentos. Probá más tarde." } });
 const claimLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 8, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Demasiadas solicitudes. Probá más tarde." } });
 
-const encryptionKey = crypto.createHash("sha256").update(process.env.JWT_SECRET).digest();
-function encrypt(value) {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", encryptionKey, iv);
-  const encrypted = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
-  return Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString("base64");
-}
-function decrypt(value) {
-  const data = Buffer.from(value, "base64");
-  const decipher = crypto.createDecipheriv("aes-256-gcm", encryptionKey, data.subarray(0, 12));
-  decipher.setAuthTag(data.subarray(12, 28));
-  return Buffer.concat([decipher.update(data.subarray(28)), decipher.final()]).toString("utf8");
-}
 function activeProfile(user) {
   return user.claimedProfile || user.profile;
 }
 function accountData(user) {
   const profile = activeProfile(user);
-  return { id: user.id, email: user.email, role: user.role, mfaEnabled: user.role === "ADMIN" ? user.mfaEnabled : undefined, profile: profile ? safeProfile(profile, true) : null };
+  return { id: user.id, email: user.email, role: user.role, profile: profile ? safeProfile(profile, true) : null };
 }
 async function audit(actorId, action, targetId, detail) {
   await prisma.auditEvent.create({ data: { actorId, action, targetId, detail } });
@@ -235,8 +223,6 @@ async function auth(req, res, next) {
 function adminOnly(req, res, next) {
   if (req.user.role !== "ADMIN")
     return res.status(403).json({ error: "Acceso restringido." });
-  if (!req.user.mfaEnabled)
-    return res.status(403).json({ error: "Activá la verificación en dos pasos para administrar el padrón.", code: "MFA_SETUP_REQUIRED" });
   next();
 }
 
@@ -265,7 +251,7 @@ app.post("/api/auth/register", authLimiter, async (req, res, next) => {
     const normalizedEmail = cleanText(email, 200).toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail))
       return res.status(400).json({ error: "Ingresá un email válido." });
-    if (typeof password !== "string" || password.length < 8)
+    if (!demoMode && (typeof password !== "string" || password.length < 8))
       return res
         .status(400)
         .json({ error: "La contraseña necesita al menos 8 caracteres." });
@@ -297,7 +283,7 @@ app.post("/api/auth/register", authLimiter, async (req, res, next) => {
     const user = await prisma.user.create({
       data: {
         email: normalizedEmail,
-        passwordHash: await bcrypt.hash(password, 12),
+        passwordHash: await bcrypt.hash(demoMode ? crypto.randomBytes(32).toString("hex") : password, 12),
         role,
         profile: {
           create: {
@@ -325,18 +311,11 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
     where: { email },
     include: { profile: true, claimedProfile: true },
   });
-  if (
-    !user ||
-    !(await bcrypt.compare(req.body.password || "", user.passwordHash))
-  ) {
+  if (!user || (!demoMode && !(await bcrypt.compare(req.body.password || "", user.passwordHash)))) {
     return res.status(401).json({ error: "Email o contraseña incorrectos." });
   }
-  if (user.role === "ADMIN" && user.mfaEnabled) {
-    const code = cleanText(req.body.code, 20).replace(/\s/g, "");
-    if (!code) return res.status(401).json({ error: "Ingresá el código de tu aplicación de autenticación.", code: "MFA_REQUIRED" });
-    if (!authenticator.check(code, decrypt(user.mfaSecret)))
-      return res.status(401).json({ error: "Código de verificación incorrecto." });
-  }
+  if ((req.body.adminPortal === true) !== (user.role === "ADMIN"))
+    return res.status(403).json({ error: user.role === "ADMIN" ? "Ingresá desde el acceso de administración." : "Este acceso es solo para administración." });
   sessionCookie(res, user);
   res.json({ user: accountData(user) });
 });
@@ -482,32 +461,6 @@ app.post("/api/profiles/:id/claim", claimLimiter, auth, async (req, res, next) =
     });
     await audit(req.user.id, "CLAIM_SUBMITTED", profile.id, { claimId: claim.id });
     res.status(201).json({ claim: { id: claim.id, status: claim.status } });
-  } catch (error) { next(error); }
-});
-
-app.post("/api/admin/mfa/setup", auth, async (req, res, next) => {
-  try {
-    if (req.user.role !== "ADMIN") return res.status(403).json({ error: "Acceso restringido." });
-    if (req.user.mfaEnabled) return res.status(409).json({ error: "La verificación en dos pasos ya está activada." });
-    if (!await bcrypt.compare(req.body.password || "", req.user.passwordHash))
-      return res.status(401).json({ error: "Contraseña incorrecta." });
-    const secret = authenticator.generateSecret();
-    await prisma.user.update({ where: { id: req.user.id }, data: { mfaPendingSecret: encrypt(secret) } });
-    const uri = authenticator.keyuri(req.user.email, "IIDCA Social Club", secret);
-    res.json({ secret, qr: await QRCode.toDataURL(uri) });
-  } catch (error) { next(error); }
-});
-
-app.post("/api/admin/mfa/confirm", auth, async (req, res, next) => {
-  try {
-    if (req.user.role !== "ADMIN" || !req.user.mfaPendingSecret)
-      return res.status(403).json({ error: "Iniciá la configuración primero." });
-    const code = cleanText(req.body.code, 20).replace(/\s/g, "");
-    if (!authenticator.check(code, decrypt(req.user.mfaPendingSecret)))
-      return res.status(400).json({ error: "El código no coincide. Revisá la hora del teléfono." });
-    await prisma.user.update({ where: { id: req.user.id }, data: { mfaSecret: req.user.mfaPendingSecret, mfaPendingSecret: null, mfaEnabled: true } });
-    await audit(req.user.id, "MFA_ENABLED", req.user.id);
-    res.json({ ok: true });
   } catch (error) { next(error); }
 });
 

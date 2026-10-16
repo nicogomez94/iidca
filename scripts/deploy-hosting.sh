@@ -3,6 +3,11 @@ set -euo pipefail
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 remote_app="/var/www/sites/iidca-social-club/app"
+demo_mode="${DEMO_MODE:-true}"
+if [[ "$demo_mode" != "true" && "$demo_mode" != "false" ]]; then
+  echo "DEMO_MODE debe ser true o false." >&2
+  exit 1
+fi
 
 if [[ -n "$(git -C "$project_dir" status --porcelain)" ]]; then
   echo "Hay cambios sin commitear. Hacé el commit antes de desplegar." >&2
@@ -23,10 +28,16 @@ rsync -az \
   --rsync-path='runuser -u site-iidca -- rsync' \
   "$project_dir/" "hosting:$remote_app/"
 
-ssh hosting 'bash -se' <<'REMOTE'
+ssh hosting "DEMO_MODE=$demo_mode bash -se" <<'REMOTE'
 set -euo pipefail
 app=/var/www/sites/iidca-social-club/app
-runuser -u site-iidca -- sh -c "cd '$app' && npm ci && npm run db:generate && npm run db:deploy && VITE_DEBUG=false VITE_TESTING_DEFAULT=true npm run build"
+environment=/var/www/sites/iidca-social-club/shared/app.env
+if grep -q '^DEMO_MODE=' "$environment"; then
+  sed -i "s/^DEMO_MODE=.*/DEMO_MODE=$DEMO_MODE/" "$environment"
+else
+  printf '\nDEMO_MODE=%s\n' "$DEMO_MODE" >> "$environment"
+fi
+runuser -u site-iidca -- sh -c "cd '$app' && npm ci && npm run db:generate && npm run db:deploy && VITE_DEMO_MODE='$DEMO_MODE' npm run build && npm run db:seed"
 nginx -t
 systemctl restart iidca-social-club.service
 for attempt in 1 2 3 4 5 6 7 8 9 10; do

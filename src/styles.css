@@ -2442,7 +2442,6 @@ em {
 }
 
 .coordinate-fields label,
-.mfa-setup-card label,
 .admin-edit-modal label {
   display: grid;
   gap: 5px;
@@ -2452,7 +2451,6 @@ em {
 }
 
 .coordinate-fields input,
-.mfa-setup-card input,
 .admin-edit-modal input,
 .admin-search input,
 .claim-panel textarea {
@@ -2525,7 +2523,6 @@ em {
 }
 
 .claim-panel form,
-.mfa-setup-card form,
 .admin-edit-modal {
   display: grid;
   gap: 13px;
@@ -2542,26 +2539,6 @@ em {
 .claim-panel textarea {
   min-height: 100px;
   resize: vertical;
-}
-
-.mfa-setup-page {
-  display: grid;
-  place-items: center;
-}
-
-.mfa-setup-card {
-  width: min(100%, 520px);
-  padding: 30px;
-}
-
-.mfa-qr {
-  width: 180px;
-  height: 180px;
-}
-
-.mfa-setup-card code {
-  overflow-wrap: anywhere;
-  color: var(--navy);
 }
 
 .admin-tools {

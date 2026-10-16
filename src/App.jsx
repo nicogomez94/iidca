@@ -111,14 +111,6 @@ function Header({ view, onNavigate, onAuth, user, onLogout }) {
           <button onClick={() => go("home", "proposito")}>
             Nuestro propósito
           </button>
-          {user?.role === "ADMIN" && (
-            <button
-              className={view === "admin" ? "active" : ""}
-              onClick={() => go("admin")}
-            >
-              Administración
-            </button>
-          )}
           <div className="mobile-nav-actions">
             {user ? (
               <>
@@ -374,7 +366,7 @@ function Home({ onSearch, onNavigate, onAuth }) {
                 para encontrar tu próximo movimiento.
               </span>
             </div>
-            <p className="hero-photo-credit">Imágenes ilustrativas de deporte · <a href="/creditos-fotos.html">Ver créditos de fotografía</a>.</p>
+            <p className="hero-photo-credit"><a href="/creditos-fotos.html">Créditos de fotografía</a></p>
           </div>
           <HeroGraphic />
         </div>
@@ -514,8 +506,7 @@ function ProfileCard({ profile, onOpen }) {
       className={`directory-card role-${profile.category.toLowerCase()}`}
     >
       <div className="card-photo">
-        <img src={profile.imageUrl || "/images/sports/running.jpg"} alt={profile.imageIllustrative || !profile.imageUrl ? `Imagen ilustrativa de deporte para ${profile.name}` : `Sede de ${profile.name}`} loading="lazy" />
-        {(profile.imageIllustrative || !profile.imageUrl) && <span className="photo-disclaimer">Foto ilustrativa</span>}
+        <img src={profile.imageUrl || "/images/sports/running.jpg"} alt={profile.imageIllustrative || !profile.imageUrl ? `Actividad deportiva de ${profile.name}` : `Sede de ${profile.name}`} loading="lazy" />
       </div>
       <div className="card-top">
         <div className="card-icon">{roleIcon(profile.category, 25)}</div>
@@ -728,7 +719,7 @@ function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
             />
           )}
           <p className="directory-disclaimer">
-            Las fichas con “Datos públicos” provienen de un padrón abierto y todavía no fueron reclamadas por el club. Las fotos ilustrativas muestran el deporte, no necesariamente la sede.
+            Las fichas con “Datos públicos” provienen de un padrón abierto y todavía no fueron reclamadas por el club. Las fotografías muestran la sede o una actividad deportiva.
             Fuente: <a href="https://data.buenosaires.gob.ar/es_AR/dataset/clubes" target="_blank" rel="noopener noreferrer">Buenos Aires Data · Clubes</a>.
           </p>
         </div>
@@ -739,7 +730,7 @@ function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
 
 function DetailModal({ profile, onClose, user, onAuth }) {
   const [claimOpen, setClaimOpen] = useState(false);
-  const [evidence, setEvidence] = useState("");
+  const [evidence, setEvidence] = useState(testingMode ? "Solicitud de prueba: represento a este club y quiero verificar cómo funciona la revisión de fichas en IIDCA." : "");
   const [claimMessage, setClaimMessage] = useState("");
   const [claimBusy, setClaimBusy] = useState(false);
   if (!profile) return null;
@@ -790,7 +781,7 @@ function DetailModal({ profile, onClose, user, onAuth }) {
           <X size={22} />
         </button>
         <div className="detail-banner">
-          <img className="detail-cover" src={profile.imageUrl || "/images/sports/running.jpg"} alt={profile.imageIllustrative || !profile.imageUrl ? "Fotografía deportiva ilustrativa" : `Sede de ${profile.name}`} />
+          <img className="detail-cover" src={profile.imageUrl || "/images/sports/running.jpg"} alt={profile.imageIllustrative || !profile.imageUrl ? `Actividad deportiva de ${profile.name}` : `Sede de ${profile.name}`} />
           <div className="detail-banner-icon">
             {roleIcon(profile.category, 38)}
           </div>
@@ -804,7 +795,7 @@ function DetailModal({ profile, onClose, user, onAuth }) {
           <div className="detail-verification">
             {profile.verification === "VERIFIED" ? <><BadgeCheck size={18} /> Ficha verificada por IIDCA</> : <><CircleHelp size={18} /> Información pública sin reclamar</>}
           </div>
-          {profile.imageSourceUrl && <p className="image-credit">{profile.imageIllustrative ? "Foto ilustrativa · " : "Foto de la sede · "}<a href={profile.imageSourceUrl} target="_blank" rel="noopener noreferrer">{profile.imageCredit || "Wikimedia Commons"}</a></p>}
+          {profile.imageSourceUrl && <p className="image-credit"><a href={profile.imageSourceUrl} target="_blank" rel="noopener noreferrer">{profile.imageCredit || "Wikimedia Commons"}</a></p>}
           <p className="detail-headline">{profile.headline}</p>
           <div className="detail-meta">
             <span>
@@ -984,7 +975,7 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
   const [role, setRole] = useState("ATHLETE");
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState(() =>
-    mode === "login" ? createLoginDefaults() : createRegistrationDefaults(),
+    mode === "login" || mode === "admin" ? createLoginDefaults(mode === "admin") : createRegistrationDefaults(),
   );
   const [accepted, setAccepted] = useState(false);
   const [publicConsent, setPublicConsent] = useState(false);
@@ -1001,7 +992,7 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
     try {
       const data = await api("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email: draft.email, password: draft.password, code: draft.code }),
+        body: JSON.stringify({ email: draft.email, password: draft.password, adminPortal: mode === "admin" }),
       });
       onSuccess(data.user);
     } catch (issue) {
@@ -1071,24 +1062,24 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
         className="auth-modal"
         role="dialog"
         aria-modal="true"
-        aria-label={mode === "login" ? "Ingresar" : "Crear perfil"}
+        aria-label={mode === "register" ? "Crear perfil" : mode === "admin" ? "Administración" : "Ingresar"}
       >
         <button className="modal-close" onClick={onClose} aria-label="Cerrar">
           <X size={22} />
         </button>
-        {mode === "login" ? (
+        {mode === "login" || mode === "admin" ? (
           <div className="auth-content">
             <div className="auth-symbol">
               <LogIn size={26} />
             </div>
-            <div className="eyebrow eyebrow-blue">BIENVENIDO DE VUELTA</div>
+            <div className="eyebrow eyebrow-blue">{mode === "admin" ? "ACCESO ADMINISTRADOR" : "BIENVENIDO DE VUELTA"}</div>
             <h2>
-              Entrá a tu <em>espacio.</em>
+              {mode === "admin" ? <>Panel de <em>IIDCA.</em></> : <>Entrá a tu <em>espacio.</em></>}
             </h2>
-            <p>Seguimos conectando personas con oportunidades para moverse.</p>
+            <p>{mode === "admin" ? "Revisá fichas y solicitudes de la comunidad." : "Seguimos conectando personas con oportunidades para moverse."}</p>
             {testingMode && (
               <p className="test-mode-note">
-                Modo de prueba: ingresá con la última cuenta ficticia que registraste.
+                Modo demo: podés ingresar sin contraseña. Los datos están precargados para probar.
               </p>
             )}
             <form onSubmit={submitLogin} className="auth-form">
@@ -1105,17 +1096,12 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
               <FormField
                 field={{
                   name: "password",
-                  label: "Contraseña",
+                  label: testingMode ? "Contraseña (opcional en demo)" : "Contraseña",
                   type: "password",
-                  required: true,
+                  required: !testingMode,
                 }}
                 value={draft.password}
                 onChange={(value) => change("password", value)}
-              />
-              <FormField
-                field={{ label: "Código de 6 dígitos (solo administración)", inputMode: "numeric" }}
-                value={draft.code || ""}
-                onChange={(value) => change("code", value)}
               />
               {error && (
                 <div className="feedback error" role="alert">
@@ -1130,7 +1116,7 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
                 <ArrowRight size={18} />
               </button>
             </form>
-            <p className="auth-switch">
+            {mode !== "admin" && <p className="auth-switch">
               ¿Todavía no tenés perfil?{" "}
               <button
                 onClick={() => {
@@ -1140,7 +1126,7 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
               >
                 Sumate al club
               </button>
-            </p>
+            </p>}
           </div>
         ) : (
           <div className="auth-content auth-content-register">
@@ -1341,9 +1327,9 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
                     />
                     <FormField
                       field={{
-                        label: "Contraseña (mínimo 8 caracteres)",
+                        label: testingMode ? "Contraseña (opcional en demo)" : "Contraseña (mínimo 8 caracteres)",
                         type: "password",
-                        required: true,
+                        required: !testingMode,
                       }}
                       value={draft.password}
                       onChange={(value) => change("password", value)}
@@ -1708,37 +1694,19 @@ function MemberProfile({ user, onUpdate, onExplore }) {
   );
 }
 
-function Admin({ user, onUpdate }) {
+function Admin({ user, onAuth }) {
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(null);
-  const [mfaPassword, setMfaPassword] = useState("");
-  const [mfaCode, setMfaCode] = useState("");
-  const [mfaSetup, setMfaSetup] = useState(null);
   const load = () =>
     api("/admin/overview")
       .then(setOverview)
       .catch((issue) => setError(issue.message));
   useEffect(() => {
-    if (user?.role === "ADMIN" && user.mfaEnabled) load();
+    if (user?.role === "ADMIN") load();
   }, [user]);
-  const startMfa = async (event) => {
-    event.preventDefault();
-    setError("");
-    try {
-      setMfaSetup(await api("/admin/mfa/setup", { method: "POST", body: JSON.stringify({ password: mfaPassword }) }));
-    } catch (issue) { setError(issue.message); }
-  };
-  const confirmMfa = async (event) => {
-    event.preventDefault();
-    setError("");
-    try {
-      await api("/admin/mfa/confirm", { method: "POST", body: JSON.stringify({ code: mfaCode }) });
-      onUpdate({ ...user, mfaEnabled: true });
-    } catch (issue) { setError(issue.message); }
-  };
   const decideClaim = async (id, decision) => {
     setBusy(id);
     setError("");
@@ -1795,27 +1763,8 @@ function Admin({ user, onUpdate }) {
       <main className="container dashboard-page">
         <div className="empty-state">
           <LockKeyhole />
-          <h2>Acceso restringido</h2>
-        </div>
-      </main>
-    );
-  if (!user.mfaEnabled)
-    return (
-      <main className="container dashboard-page mfa-setup-page">
-        <div className="dashboard-card mfa-setup-card">
-          <LockKeyhole size={34} />
-          <h1>Protegé el padrón de IIDCA</h1>
-          <p>Antes de abrir la administración, vinculá una aplicación de autenticación. Vas a usar un código de seis dígitos al ingresar.</p>
-          {error && <div className="feedback error" role="alert">{error}</div>}
-          {!mfaSetup ? <form onSubmit={startMfa}>
-            <label>Confirmá tu contraseña <input type="password" required value={mfaPassword} onChange={(event) => setMfaPassword(event.target.value)} /></label>
-            <button className="button button-primary">Configurar verificación</button>
-          </form> : <form onSubmit={confirmMfa}>
-            <img className="mfa-qr" src={mfaSetup.qr} alt="Código QR para la aplicación de autenticación" />
-            <p>Escaneá el QR o cargá esta clave manualmente: <code>{mfaSetup.secret}</code></p>
-            <label>Código de seis dígitos <input inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required value={mfaCode} onChange={(event) => setMfaCode(event.target.value)} /></label>
-            <button className="button button-primary">Activar y entrar al panel</button>
-          </form>}
+          <h2>{user ? "Acceso restringido" : "Administración IIDCA"}</h2>
+          {!user && <button className="button button-primary" onClick={() => onAuth("admin")}>Ingresar al panel</button>}
         </div>
       </main>
     );
@@ -1997,10 +1946,9 @@ function Footer({ onNavigate, onAuth }) {
 
 export default function App() {
   const routeFromHash = () =>
-    ({
+    window.location.pathname === "/admin" ? "admin" : ({
       "#explorar": "explore",
       "#mi-espacio": "profile",
-      "#administracion": "admin",
     })[window.location.hash] || "home";
   const [view, setView] = useState(routeFromHash);
   const [authMode, setAuthMode] = useState(null);
@@ -2014,7 +1962,9 @@ export default function App() {
   useEffect(() => {
     api("/me")
       .then((data) => setUser(data.user))
-      .catch(() => {});
+      .catch(() => {
+        if (window.location.pathname === "/admin") setAuthMode("admin");
+      });
   }, []);
   useEffect(() => {
     setDirectoryLoading(true);
@@ -2030,7 +1980,11 @@ export default function App() {
   useEffect(() => {
     const onHash = () => setView(routeFromHash());
     window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+    window.addEventListener("popstate", onHash);
+    return () => {
+      window.removeEventListener("hashchange", onHash);
+      window.removeEventListener("popstate", onHash);
+    };
   }, []);
 
   const navigate = (next, anchor) => {
@@ -2038,11 +1992,8 @@ export default function App() {
     const hashes = {
       explore: "explorar",
       profile: "mi-espacio",
-      admin: "administracion",
     };
-    if (next === "home")
-      window.history.pushState(null, "", window.location.pathname);
-    else window.location.hash = hashes[next];
+    window.history.pushState(null, "", next === "admin" ? "/admin" : next === "home" ? "/" : `/#${hashes[next]}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (anchor)
       window.setTimeout(
@@ -2111,7 +2062,7 @@ export default function App() {
             </div>
           </main>
         ))}
-      {view === "admin" && <Admin user={user} onUpdate={setUser} />}
+      {view === "admin" && <Admin user={user} onAuth={setAuthMode} />}
       <Footer onNavigate={navigate} onAuth={setAuthMode} />
       <AuthModal
         key={authMode || "closed"}

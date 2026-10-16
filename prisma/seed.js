@@ -2,6 +2,7 @@ import "dotenv/config";
 import crypto from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 const sourceUrl = "https://data.buenosaires.gob.ar/es_AR/dataset/clubes";
@@ -69,6 +70,22 @@ const oldExampleNames = [
 ];
 
 try {
+  if (process.env.DEMO_MODE === "true") {
+    const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 12);
+    await prisma.user.upsert({
+      where: { email: "admin@iidca.test" },
+      update: {},
+      create: { email: "admin@iidca.test", passwordHash, role: "ADMIN" },
+    });
+    await prisma.user.upsert({
+      where: { email: "test@iidca.test" },
+      update: {},
+      create: {
+        email: "test@iidca.test", passwordHash, role: "ATHLETE",
+        profile: { create: { name: "Alex Demo", category: "ATHLETE", city: "Ciudad de Buenos Aires", sports: ["Fútbol"], status: "HIDDEN", isDemo: true } },
+      },
+    });
+  }
   const removedProfiles = await prisma.profile.deleteMany({ where: { isDemo: true, name: { in: oldExampleNames } } });
   const oldUsers = await prisma.user.findMany({
     where: { email: { in: oldExamples } },

@@ -7,13 +7,13 @@ Aplicación responsive para acercar personas a oportunidades deportivas. Su tono
 - Inicio con fotografías de personas practicando deporte y navegación accesible en celular y escritorio.
 - Directorio con búsqueda por deporte, ubicación y categoría, vista de listado y Google Maps, geolocalización opcional y fichas con actividades, dirección, fuente y estado de verificación.
 - Padrón inicial de 310 clubes reales obtenido de [Buenos Aires Data · Clubes](https://data.buenosaires.gob.ar/es_AR/dataset/clubes). La importación es repetible, registra procedencia y fecha, y evita duplicados por identificador de fuente o nombre y dirección.
-- Imágenes de sedes reales para clubes destacados y fotografías del deporte correspondiente para el resto, rotuladas como **Foto ilustrativa**. [Créditos y licencias](public/creditos-fotos.html) se generan con `npm run build` a partir de `data/image-credits.json`.
+- Imágenes de sedes reales para clubes destacados y fotografías del deporte correspondiente para el resto. [Créditos y licencias](public/creditos-fotos.html) se generan con `npm run build` a partir de `data/image-credits.json`.
 - Registro e ingreso de deportistas, clubes, profesionales, federaciones y marcas. Los perfiles de deportistas son privados. Los perfiles públicos nuevos requieren aprobación.
 - Solicitud de titularidad de una ficha por una organización registrada, con evidencia revisada por el administrador. La aprobación vincula la ficha a su cuenta y permite editarla.
-- Panel administrador con autenticación de dos factores TOTP, gestión de solicitudes y fichas, bitácora de cambios y exportaciones privadas en Excel y PDF.
+- Panel administrador con acceso separado en `/admin`, gestión de solicitudes y fichas, bitácora de cambios y exportaciones privadas en Excel y PDF.
 - [Presentación para clubes](public/para-clubes.html) para compartir el funcionamiento de la plataforma.
 
-Las fichas importadas están marcadas como **Aún no verificada** hasta que IIDCA apruebe su titularidad o revise sus datos. La fuente original y las imágenes pueden cambiar; el contacto tomado del padrón queda privado hasta que la organización autorice su publicación. Las fotos deportivas genéricas son ilustrativas y nunca se presentan como fotografías de una sede particular.
+Las fichas importadas están marcadas como **Aún no verificada** hasta que IIDCA apruebe su titularidad o revise sus datos. La fuente original y las imágenes pueden cambiar; el contacto tomado del padrón queda privado hasta que la organización autorice su publicación. Las fotografías de actividades no se atribuyen a una sede particular.
 
 ## Requisitos y desarrollo
 
@@ -25,7 +25,7 @@ Las fichas importadas están marcadas como **Aún no verificada** hasta que IIDC
 
 `npm run db:seed` carga el snapshot reproducible `data/clubes-caba.json`. Para actualizar el padrón desde su fuente oficial, usar `npm run db:import-clubs` y revisar el resultado. La importación conserva fichas verificadas o reclamadas y sus cambios de imagen. Los seis ejemplos ficticios de la primera versión se eliminan al sembrar datos.
 
-Para crear un administrador, agregar temporalmente `ADMIN_EMAIL` y `ADMIN_PASSWORD` (mínimo 12 caracteres) a `.env`, ejecutar `npm run admin:create` y eliminar la contraseña del archivo. En el primer ingreso, el panel guía la activación de TOTP mediante una aplicación autenticadora. Después, cada ingreso administrador requiere el código de seis dígitos.
+Para crear un administrador fuera del modo demo, agregar temporalmente `ADMIN_EMAIL` y `ADMIN_PASSWORD` (mínimo 12 caracteres) a `.env`, ejecutar `npm run admin:create` y eliminar la contraseña del archivo. El acceso administrador está en `/admin`; el botón Ingresar del menú es para los demás perfiles.
 
 ## Google Maps
 
@@ -39,8 +39,8 @@ El Git local tiene `origin` para [GitHub](https://github.com/nicogomez94/iidca) 
 
 `bash scripts/install-hosting-backup.sh` instala una copia diaria exclusiva de esta base en `shared/backups`, verifica que `pg_restore` pueda leer el archivo y conserva 14 días. Se recomienda probar una restauración en una base separada antes de depender de estas copias. Las exportaciones del administrador son adicionales a ese respaldo.
 
-El despliegue actual mantiene `VITE_TESTING_DEFAULT=true`: los formularios de registro aparecen precargados con datos ficticios editables para facilitar las pruebas; las confirmaciones de edad y publicación se completan manualmente. Para desactivar esa precarga, cambiarlo a `false` en el script de despliegue. `VITE_DEBUG=false` se mantiene en producción.
+El despliegue actual usa `DEMO_MODE=true` en el servidor y `VITE_DEMO_MODE=true` en el frontend. En este modo los formularios de prueba aparecen precargados y las contraseñas no se comprueban al ingresar ni son obligatorias al registrarse. Hay dos cuentas de prueba: `test@iidca.test` y `admin@iidca.test`; el campo contraseña puede quedar vacío o tener `iidca`. La primera entra por el botón Ingresar y la segunda por `/admin`. El despliegue se controla con `DEMO_MODE=true|false bash scripts/deploy-hosting.sh`; cuando se desactiva, el servidor vuelve a exigir las contraseñas reales. **El modo demo permite que cualquiera que conozca un email existente entre a esa cuenta, incluido el administrador; usalo solo durante pruebas controladas.**
 
 ## Privacidad
 
-Las coordenadas exactas de una ficha son opcionales. El navegador pide permiso antes de usar la geolocalización y requiere HTTPS fuera de localhost. La API pública excluye contactos importados, identificadores de cuentas, solicitudes de titularidad y bitácora. Las exportaciones privadas requieren una sesión administradora con MFA. Las fichas de deportistas nunca entran al directorio público.
+Las coordenadas exactas de una ficha son opcionales. El navegador pide permiso antes de usar la geolocalización y requiere HTTPS fuera de localhost. La API pública excluye contactos importados, identificadores de cuentas, solicitudes de titularidad y bitácora. Las exportaciones privadas requieren una sesión administradora. Las fichas de deportistas nunca entran al directorio público.

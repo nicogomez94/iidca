@@ -1,15 +1,11 @@
-const localDebug = import.meta.env.VITE_DEBUG === "true";
-export const testingMode =
-  localDebug ||
-  import.meta.env.VITE_TESTING_DEFAULT === "true" ||
-  new URLSearchParams(window.location.search).get("testing") === "1";
+export const testingMode = import.meta.env.VITE_DEMO_MODE === "true";
 
 const shared = {
   city: "Ciudad de Buenos Aires",
   neighborhood: "Palermo",
   sport: "Fútbol",
   sports: "Futsal, entrenamiento funcional",
-  password: "PruebaSegura123",
+  password: "iidca",
 };
 
 const byRole = {
@@ -84,10 +80,10 @@ export function createRegistrationDefaults(role = "ATHLETE") {
   };
 }
 
-export function createLoginDefaults() {
+export function createLoginDefaults(adminPortal = false) {
   if (!testingMode) return {};
   return {
-    email: window.sessionStorage.getItem("iidcaTestEmail") || "",
+    email: adminPortal ? "admin@iidca.test" : window.sessionStorage.getItem("iidcaTestEmail") || "test@iidca.test",
     password: shared.password,
   };
 }

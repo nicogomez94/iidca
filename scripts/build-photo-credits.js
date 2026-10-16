@@ -36,7 +36,7 @@ const html = `<!doctype html>
 </head>
 <body>
   <header><div><a href="/">← IIDCA Social Club</a><h1>Créditos de fotografía</h1></div></header>
-  <main><p>Las imágenes de clubes identifican sedes reales cuando así se indica. Las imágenes deportivas restantes son ilustrativas. Agradecemos a sus autores y a Wikimedia Commons por compartirlas con licencias abiertas.</p>${items}</main>
+  <main><p>Algunas fotografías muestran sedes reales; otras muestran las actividades deportivas del directorio. Agradecemos a sus autores y a Wikimedia Commons por compartirlas con licencias abiertas.</p>${items}</main>
 </body>
 </html>`;
 await writeFile(new URL("../public/creditos-fotos.html", import.meta.url), html);
