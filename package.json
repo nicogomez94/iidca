@@ -7,27 +7,32 @@
     "dev": "concurrently -k \"npm:dev:server\" \"npm:dev:client\"",
     "dev:client": "vite --host 127.0.0.1",
     "dev:server": "node --watch server/index.js",
-    "build": "vite build",
+    "build": "node scripts/build-photo-credits.js && vite build",
     "start": "node server/index.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "node prisma/seed.js",
+    "db:import-clubs": "node prisma/seed.js --live",
     "admin:create": "node scripts/create-admin.js"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
+    "@vis.gl/react-google-maps": "^1.10.1",
     "bcryptjs": "^3.0.2",
     "cookie-parser": "^1.4.7",
     "dotenv": "^18.0.7",
+    "exceljs": "^4.4.0",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.7.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
-    "leaflet": "^1.9.4",
     "lucide-react": "^0.468.0",
+    "otplib": "^12.0.1",
+    "pdfkit": "^0.20.2",
+    "qrcode": "^1.5.4",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "react-leaflet": "^5.0.0"
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.4",
@@ -36,6 +41,7 @@
     "vite": "^7.1.12"
   },
   "overrides": {
-    "deepmerge-ts": "^8.0.0"
+    "deepmerge-ts": "^8.0.0",
+    "uuid": "^11.1.0"
   }
 }

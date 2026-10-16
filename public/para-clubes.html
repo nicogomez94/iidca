@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#090c70" />
+    <title>Tu club tiene una historia para contar · IIDCA Social Club</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Outfit:wght@500;700;800;900&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        font-family: "DM Sans", sans-serif;
+        color: #121846;
+        background: #faf9f6;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; }
+      img { max-width: 100%; }
+      a { color: inherit; }
+      .container { width: min(1100px, calc(100% - 48px)); margin: auto; }
+      header { background: #090c70; color: white; }
+      header .container { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 0; }
+      .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-family: Outfit, sans-serif; font-weight: 900; font-size: 20px; }
+      .brand img { width: 46px; height: 46px; object-fit: contain; background: white; border-radius: 50%; }
+      header nav a { font-size: 13px; font-weight: 700; text-decoration: none; }
+      .hero { display: grid; grid-template-columns: 1.1fr .9fr; gap: 40px; align-items: center; padding: 55px 0 63px; }
+      .eyebrow { color: #e91819; font-family: Outfit, sans-serif; font-size: 12px; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
+      h1, h2, h3 { font-family: Outfit, sans-serif; color: #090c70; }
+      h1 { margin: 14px 0 20px; font-size: 58px; line-height: .98; letter-spacing: -.055em; }
+      h1 em { color: #e91819; font-style: normal; }
+      .hero p { max-width: 560px; color: #4d5873; font-size: 18px; line-height: 1.55; }
+      .hero img { width: 100%; height: 420px; object-fit: cover; border-radius: 8px 8px 100px 8px; }
+      .button { display: inline-block; margin-top: 15px; padding: 14px 19px; background: #ff9d00; border-radius: 5px; color: #090c70; font-family: Outfit, sans-serif; font-weight: 900; text-decoration: none; }
+      section { padding: 48px 0; }
+      .blue { background: #090c70; color: white; }
+      .blue h2 { color: white; }
+      h2 { margin: 0 0 22px; font-size: 34px; letter-spacing: -.04em; }
+      .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 17px; }
+      .steps article { padding: 23px; border: 1px solid #dfe2ec; border-radius: 7px; background: white; }
+      .steps strong { color: #e91819; font-family: Outfit, sans-serif; font-size: 27px; }
+      .steps h3 { margin: 12px 0 8px; }
+      .steps p { margin: 0; color: #5b667d; line-height: 1.5; }
+      .blue p { max-width: 760px; color: #e4e8ff; line-height: 1.6; }
+      .two { display: grid; grid-template-columns: 1fr 1fr; gap: 35px; align-items: center; }
+      .two img { width: 100%; max-height: 300px; object-fit: cover; border-radius: 7px; }
+      .facts { display: grid; gap: 10px; margin: 15px 0; padding: 0; list-style: none; }
+      .facts li::before { content: "✓"; margin-right: 8px; color: #e91819; font-weight: 900; }
+      .small { font-size: 11px; color: #737b8e; }
+      footer { padding: 27px 0; background: #080a40; color: #bfc6e8; font-size: 11px; }
+      footer .container { display: flex; justify-content: space-between; gap: 20px; }
+      @media (max-width: 750px) {
+        .hero, .two, .steps { grid-template-columns: 1fr; }
+        .hero { padding: 36px 0; }
+        h1 { font-size: 43px; }
+        .hero img { height: 300px; }
+        footer .container { display: grid; }
+      }
+      @media print {
+        header nav, .button { display: none; }
+        .hero { padding: 24px 0; }
+        .hero img { height: 260px; }
+        section { padding: 24px 0; break-inside: avoid; }
+        .blue { print-color-adjust: exact; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="container">
+        <a class="brand" href="/"><img src="/logo-iidca.png" alt="" /> IIDCA SOCIAL CLUB</a>
+        <nav><a href="/">Volver al directorio ↗</a></nav>
+      </div>
+    </header>
+    <main>
+      <div class="container hero">
+        <div>
+          <div class="eyebrow">Una invitación para clubes</div>
+          <h1>Tu club ya es parte del mapa. <em>Contá su historia.</em></h1>
+          <p>IIDCA Social Club acerca las personas a los espacios donde se practica deporte. Si tu club figura en el directorio, podés reclamar su ficha y mostrar qué actividades ofrece hoy.</p>
+          <a class="button" href="/#explorar">Encontrar mi club ↗</a>
+        </div>
+        <img src="/images/sports/football.jpg" alt="Mujeres jugando al fútbol" />
+      </div>
+      <section class="blue">
+        <div class="container">
+          <h2>¿Por qué aparece mi club?</h2>
+          <p>El directorio inicia con datos del registro público de clubes de la Ciudad de Buenos Aires. Estas fichas se identifican como información pública sin verificar. IIDCA no las presenta como administradas por el club hasta comprobar el vínculo con un representante.</p>
+        </div>
+      </section>
+      <section>
+        <div class="container">
+          <h2>En tres pasos</h2>
+          <div class="steps">
+            <article><strong>01</strong><h3>Encontrá tu ficha</h3><p>Buscá el nombre del club en el directorio y abrí su perfil.</p></article>
+            <article><strong>02</strong><h3>Pedí el reclamo</h3><p>Creá una cuenta de club y contanos cómo podemos comprobar que lo representás.</p></article>
+            <article><strong>03</strong><h3>Hacé crecer el perfil</h3><p>Después de la revisión de IIDCA, actualizá los datos y mostrale a la comunidad tus actividades.</p></article>
+          </div>
+        </div>
+      </section>
+      <section class="blue">
+        <div class="container two">
+          <div>
+            <h2>Más que una dirección en el mapa</h2>
+            <p>Una ficha verificada puede contar qué deportes se practican, en qué horarios, dónde está la sede y cómo contactar al club. La información la actualiza quien lo administra y IIDCA la revisa antes de publicarla.</p>
+          </div>
+          <img src="/images/sports/volleyball.jpg" alt="Personas jugando vóley en una cancha comunitaria" />
+        </div>
+      </section>
+      <section>
+        <div class="container">
+          <h2>Lo que necesitás saber</h2>
+          <ul class="facts">
+            <li>Reclamar la ficha no tiene costo.</li>
+            <li>La verificación requiere revisión de IIDCA; no es automática.</li>
+            <li>Los datos de contacto privados y el padrón administrativo no se muestran al público.</li>
+            <li>Podés solicitar una corrección de la información inicial.</li>
+          </ul>
+          <a class="button" href="/#explorar">Buscar mi club ↗</a>
+          <p class="small">Fuente del padrón inicial: Buenos Aires Data, conjunto “Clubes”, licencia CC BY 2.5 AR. Fotos deportivas ilustrativas: Wikimedia Commons; <a href="/creditos-fotos.html">créditos y licencias completas</a>.</p>
+        </div>
+      </section>
+    </main>
+    <footer><div class="container"><span>IIDCA Social Club · Deporte para más personas.</span><span>Hecho por <a href="https://zigodev.com.ar" target="_blank" rel="noopener noreferrer">zigodev</a></span></div></footer>
+  </body>
+</html>

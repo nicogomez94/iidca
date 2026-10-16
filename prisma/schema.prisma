@@ -22,6 +22,18 @@ enum ProfileStatus {
   HIDDEN
 }
 
+enum VerificationStatus {
+  UNVERIFIED
+  CLAIM_PENDING
+  VERIFIED
+}
+
+enum ClaimStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -30,12 +42,20 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   profile      Profile?
+  claimedProfile Profile? @relation("ClaimedProfile")
+  claims       ClaimRequest[]
+  mfaSecret    String?
+  mfaPendingSecret String?
+  mfaEnabled   Boolean @default(false)
+  auditEvents  AuditEvent[]
 }
 
 model Profile {
   id           String        @id @default(cuid())
-  userId       String        @unique
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String?       @unique
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  claimedById  String?       @unique
+  claimedBy    User?         @relation("ClaimedProfile", fields: [claimedById], references: [id], onDelete: SetNull)
   name         String
   category     Role
   headline     String?
@@ -54,10 +74,46 @@ model Profile {
   details      Json?
   status       ProfileStatus @default(PENDING)
   isDemo       Boolean       @default(false)
+  verification VerificationStatus @default(UNVERIFIED)
+  sourceKey    String?       @unique
+  sourceName   String?
+  sourceUrl    String?
+  sourceUpdatedAt DateTime?
+  sourceContact Json?
+  imageUrl     String?
+  imageCredit  String?
+  imageSourceUrl String?
+  imageIllustrative Boolean @default(false)
+  claims       ClaimRequest[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
   @@index([status, category])
   @@index([city])
   @@index([sport])
+}
+
+model ClaimRequest {
+  id        String @id @default(cuid())
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  evidence  String
+  status    ClaimStatus @default(PENDING)
+  reviewedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([status, createdAt])
+  @@unique([profileId, userId])
+}
+
+model AuditEvent {
+  id String @id @default(cuid())
+  actorId String?
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action String
+  targetId String?
+  detail Json?
+  createdAt DateTime @default(now())
+  @@index([createdAt])
 }

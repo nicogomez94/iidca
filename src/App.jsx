@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react";
-import L from "leaflet";
 import {
-  MapContainer,
+  APIProvider,
+  Map as GoogleMap,
   Marker,
-  TileLayer,
-  Tooltip,
   useMap,
-  useMapEvents,
-} from "react-leaflet";
+} from "@vis.gl/react-google-maps";
 import {
   ArrowDownRight,
   ArrowLeft,
@@ -50,6 +47,7 @@ import {
 } from "./debugDefaults.js";
 
 const logo = "/logo-iidca.png";
+const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const defaultFilters = {
   sport: "",
   location: testingMode ? "Ciudad de Buenos Aires" : "",
@@ -325,32 +323,11 @@ function SearchForm({ initial = defaultFilters, onSearch, compact = false }) {
 
 function HeroGraphic() {
   return (
-    <div className="hero-visual" aria-hidden="true">
-      <div className="hero-track track-one" />
-      <div className="hero-track track-two" />
-      <div className="hero-track track-three" />
-      <div className="hero-glow" />
-      <span className="hero-sport sport-top">
-        <Volleyball size={30} />
-      </span>
-      <span className="hero-sport sport-left">
-        <Waves size={31} />
-      </span>
-      <span className="hero-sport sport-bottom">
-        <Dumbbell size={30} />
-      </span>
-      <div className="hero-sticker">
-        <span>
-          ENCONTRÁ
-          <br />
-          TU LUGAR
-        </span>
-        <ArrowDownRight size={40} strokeWidth={1.7} />
-      </div>
-      <div className="hero-crest">
-        <img src={logo} alt="" />
-      </div>
-      <div className="hero-visual-caption">EL DEPORTE NOS ENCUENTRA</div>
+    <div className="hero-visual">
+      <img className="hero-photo-main" src="/images/sports/volleyball.jpg" alt="Personas jugando vóley en una cancha comunitaria" />
+      <img className="hero-photo-small" src="/images/sports/wheelchair.jpg" alt="Mujeres jugando básquet adaptado" />
+      <div className="hero-sticker"><span>EL DEPORTE<br />NOS ENCUENTRA</span><ArrowDownRight size={32} /></div>
+      <div className="hero-visual-caption">Clubes reales. Personas reales. Más encuentros.</div>
     </div>
   );
 }
@@ -372,8 +349,8 @@ function Home({ onSearch, onNavigate, onAuth }) {
               <em>para vos.</em>
             </h1>
             <p>
-              Encontrá clubes, profesionales y organizaciones deportivas cerca
-              tuyo. Empezar es más fácil cuando sabés dónde ir.
+              Conocé los clubes y espacios deportivos de tu barrio. Detrás de cada
+              dirección hay personas, actividades y una comunidad esperando encontrarte.
             </p>
             <div className="hero-actions">
               <button
@@ -386,7 +363,7 @@ function Home({ onSearch, onNavigate, onAuth }) {
                 className="button button-outline"
                 onClick={() => onAuth("register")}
               >
-                Crear mi perfil <ArrowRight size={18} />
+                Soy parte de un club <ArrowRight size={18} />
               </button>
             </div>
             <div className="hero-note">
@@ -397,6 +374,7 @@ function Home({ onSearch, onNavigate, onAuth }) {
                 para encontrar tu próximo movimiento.
               </span>
             </div>
+            <p className="hero-photo-credit">Imágenes ilustrativas de deporte · <a href="/creditos-fotos.html">Ver créditos de fotografía</a>.</p>
           </div>
           <HeroGraphic />
         </div>
@@ -496,9 +474,9 @@ function Home({ onSearch, onNavigate, onAuth }) {
               <em>Más clubes vivos.</em>
             </h2>
             <p>
-              Personas que buscan moverse, clubes que abren sus puertas y
-              organizaciones que impulsan el deporte. Cuando nos conectamos,
-              ganamos todos.
+              Los clubes de barrio son lugares para aprender, encontrarse y crecer.
+              Ya podés descubrirlos en el mapa. Si representás a uno, reclamá su ficha
+              y mostrá las actividades que hacen vivir tu comunidad.
             </p>
             <button
               className="button button-white"
@@ -535,9 +513,16 @@ function ProfileCard({ profile, onOpen }) {
     <article
       className={`directory-card role-${profile.category.toLowerCase()}`}
     >
+      <div className="card-photo">
+        <img src={profile.imageUrl || "/images/sports/running.jpg"} alt={profile.imageIllustrative || !profile.imageUrl ? `Imagen ilustrativa de deporte para ${profile.name}` : `Sede de ${profile.name}`} loading="lazy" />
+        {(profile.imageIllustrative || !profile.imageUrl) && <span className="photo-disclaimer">Foto ilustrativa</span>}
+      </div>
       <div className="card-top">
         <div className="card-icon">{roleIcon(profile.category, 25)}</div>
         <span className="card-category">{categoryLabel(profile.category)}</span>
+        <span className={`verification-chip ${profile.verification === "VERIFIED" ? "is-verified" : ""}`}>
+          {profile.verification === "VERIFIED" ? <><BadgeCheck size={15} /> Verificado</> : "Datos públicos"}
+        </span>
       </div>
       <div className="card-body">
         <h3>{profile.name}</h3>
@@ -571,101 +556,84 @@ function ProfileCard({ profile, onOpen }) {
   );
 }
 
-const mapIcon = L.divIcon({
-  className: "map-marker",
-  html: "<span></span>",
-  iconSize: [26, 32],
-  iconAnchor: [13, 28],
-});
-
-function FitMap({ profiles, location }) {
+function FitGoogleMap({ profiles, location }) {
   const map = useMap();
   useEffect(() => {
-    const points = profiles
-      .filter(
-        (profile) => profile.latitude !== null && profile.longitude !== null,
-      )
-      .map((profile) => [profile.latitude, profile.longitude]);
-    if (location.lat && location.lng)
-      points.push([Number(location.lat), Number(location.lng)]);
-    if (points.length > 1)
-      map.fitBounds(points, { padding: [40, 40], maxZoom: 13 });
-    else if (points.length === 1) map.setView(points[0], 13);
+    if (!map || !window.google?.maps) return;
+    const bounds = new window.google.maps.LatLngBounds();
+    profiles.forEach((profile) => bounds.extend({ lat: profile.latitude, lng: profile.longitude }));
+    if (location.lat && location.lng) bounds.extend({ lat: Number(location.lat), lng: Number(location.lng) });
+    if (!bounds.isEmpty()) map.fitBounds(bounds, 52);
   }, [map, profiles, location.lat, location.lng]);
   return null;
 }
 
 function DirectoryMap({ profiles, filters, onOpen }) {
+  const [focused, setFocused] = useState(null);
   const points = profiles.filter(
     (profile) => profile.latitude !== null && profile.longitude !== null,
   );
+  const embedQuery = focused
+    ? `${focused.latitude},${focused.longitude}`
+    : filters.location || "clubes deportivos Ciudad de Buenos Aires";
   return (
     <div className="map-frame">
-      <MapContainer
-        center={[-34.6037, -58.3816]}
-        zoom={12}
-        scrollWheelZoom={false}
-        className="directory-map"
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        <FitMap profiles={points} location={filters} />
-        {points.map((profile) => (
-          <Marker
-            key={profile.id}
-            position={[profile.latitude, profile.longitude]}
-            icon={mapIcon}
-            eventHandlers={{ click: () => onOpen(profile) }}
-          >
-            <Tooltip direction="top" offset={[0, -20]}>
-              {profile.name}
-            </Tooltip>
-          </Marker>
-        ))}
-      </MapContainer>
+      {googleMapsKey ? (
+        <APIProvider apiKey={googleMapsKey} language="es" region="AR">
+          <GoogleMap defaultCenter={{ lat: -34.6037, lng: -58.3816 }} defaultZoom={11} gestureHandling="cooperative" className="directory-map">
+            <FitGoogleMap profiles={points} location={filters} />
+            {points.map((profile) => (
+              <Marker key={profile.id} position={{ lat: profile.latitude, lng: profile.longitude }} title={profile.name} onClick={() => onOpen(profile)} />
+            ))}
+          </GoogleMap>
+        </APIProvider>
+      ) : (
+        <div className="google-map-with-list">
+          <iframe className="directory-map" title="Google Maps: clubes deportivos" src={`https://maps.google.com/maps?q=${encodeURIComponent(embedQuery)}&z=13&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+          <div className="google-map-list" aria-label="Ubicaciones del directorio">
+            {points.map((profile) => (
+              <button key={profile.id} className={focused?.id === profile.id ? "selected" : ""} onClick={() => setFocused(profile)}>
+                <strong>{profile.name}</strong><span>{profile.neighborhood || profile.city}</span>
+              </button>
+            ))}
+            {focused && <button className="map-view-detail" onClick={() => onOpen(focused)}>Ver ficha de {focused.name} <ArrowUpRight size={16} /></button>}
+          </div>
+        </div>
+      )}
       <div className="map-caption">
-        <MapPin size={17} /> {points.length} ubicaciones en el mapa{" "}
-        <span>Mapa: OpenStreetMap</span>
+        <MapPin size={17} /> {googleMapsKey ? `${points.length} ubicaciones en el mapa` : `${points.length} clubes en el directorio · elegí uno para verlo en Google Maps`}{" "}
+        <span>Mapa: Google Maps</span>
       </div>
     </div>
   );
 }
 
-function LocationClick({ onChoose }) {
-  useMapEvents({ click: (event) => onChoose(event.latlng) });
-  return null;
-}
-
 function LocationPicker({ latitude, longitude, onChoose }) {
+  const center = latitude && longitude ? { lat: Number(latitude), lng: Number(longitude) } : { lat: -34.6037, lng: -58.3816 };
   return (
     <div className="location-picker">
       <div>
         <strong>Ubicá tu espacio en el mapa</strong>
         <span>
-          Opcional. Hacé clic en el lugar para que aparezca en las búsquedas
-          cercanas.
+          Opcional. Elegí una ubicación para aparecer en las búsquedas cercanas.
         </span>
       </div>
-      <MapContainer
-        center={[-34.6037, -58.3816]}
-        zoom={11}
-        scrollWheelZoom={false}
-        className="picker-map"
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        <LocationClick onChoose={onChoose} />
-        {latitude && longitude && (
-          <Marker
-            position={[Number(latitude), Number(longitude)]}
-            icon={mapIcon}
-          />
-        )}
-      </MapContainer>
+      {googleMapsKey ? (
+        <APIProvider apiKey={googleMapsKey} language="es" region="AR">
+          <GoogleMap center={center} zoom={latitude && longitude ? 14 : 11} gestureHandling="cooperative" className="picker-map" onClick={(event) => event.detail.latLng && onChoose(event.detail.latLng)}>
+            {latitude && longitude && <Marker position={center} />}
+          </GoogleMap>
+        </APIProvider>
+      ) : (
+        <>
+          <iframe className="picker-map" title="Google Maps para ubicar tu espacio" src={`https://maps.google.com/maps?q=${latitude && longitude ? `${latitude},${longitude}` : "Ciudad de Buenos Aires"}&z=12&output=embed`} loading="lazy" />
+          <p className="map-coordinate-help">Abrí <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer">Google Maps</a>, elegí tu sede y copiá las coordenadas.</p>
+          <div className="coordinate-fields">
+            <label>Latitud <input type="number" step="any" value={latitude ?? ""} onChange={(event) => onChoose({ lat: event.target.value, lng: longitude ?? "" })} /></label>
+            <label>Longitud <input type="number" step="any" value={longitude ?? ""} onChange={(event) => onChoose({ lat: latitude ?? "", lng: event.target.value })} /></label>
+          </div>
+        </>
+      )}
       {latitude && longitude && (
         <small>Ubicación seleccionada. Podés cambiarla con otro clic.</small>
       )}
@@ -760,8 +728,8 @@ function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
             />
           )}
           <p className="directory-disclaimer">
-            Los perfiles señalados como “Ejemplo” son ficticios y sirven para
-            mostrar cómo funciona la plataforma.
+            Las fichas con “Datos públicos” provienen de un padrón abierto y todavía no fueron reclamadas por el club. Las fotos ilustrativas muestran el deporte, no necesariamente la sede.
+            Fuente: <a href="https://data.buenosaires.gob.ar/es_AR/dataset/clubes" target="_blank" rel="noopener noreferrer">Buenos Aires Data · Clubes</a>.
           </p>
         </div>
       </section>
@@ -769,7 +737,11 @@ function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
   );
 }
 
-function DetailModal({ profile, onClose }) {
+function DetailModal({ profile, onClose, user, onAuth }) {
+  const [claimOpen, setClaimOpen] = useState(false);
+  const [evidence, setEvidence] = useState("");
+  const [claimMessage, setClaimMessage] = useState("");
+  const [claimBusy, setClaimBusy] = useState(false);
   if (!profile) return null;
   const phone = profile.phone?.replace(/[^\d+]/g, "");
   const detailLabels = {
@@ -790,6 +762,17 @@ function DetailModal({ profile, onClose }) {
     support: "Interés",
     supportType: "Tipo de apoyo",
   };
+  const submitClaim = async (event) => {
+    event.preventDefault();
+    setClaimBusy(true);
+    setClaimMessage("");
+    try {
+      await api(`/profiles/${profile.id}/claim`, { method: "POST", body: JSON.stringify({ evidence }) });
+      setClaimMessage("Recibimos el reclamo. IIDCA revisará el vínculo antes de verificar la ficha.");
+      setClaimOpen(false);
+    } catch (issue) { setClaimMessage(issue.message); }
+    finally { setClaimBusy(false); }
+  };
   return (
     <div
       className="modal-backdrop"
@@ -807,6 +790,7 @@ function DetailModal({ profile, onClose }) {
           <X size={22} />
         </button>
         <div className="detail-banner">
+          <img className="detail-cover" src={profile.imageUrl || "/images/sports/running.jpg"} alt={profile.imageIllustrative || !profile.imageUrl ? "Fotografía deportiva ilustrativa" : `Sede de ${profile.name}`} />
           <div className="detail-banner-icon">
             {roleIcon(profile.category, 38)}
           </div>
@@ -817,6 +801,10 @@ function DetailModal({ profile, onClose }) {
         </div>
         <div className="detail-content">
           <h2>{profile.name}</h2>
+          <div className="detail-verification">
+            {profile.verification === "VERIFIED" ? <><BadgeCheck size={18} /> Ficha verificada por IIDCA</> : <><CircleHelp size={18} /> Información pública sin reclamar</>}
+          </div>
+          {profile.imageSourceUrl && <p className="image-credit">{profile.imageIllustrative ? "Foto ilustrativa · " : "Foto de la sede · "}<a href={profile.imageSourceUrl} target="_blank" rel="noopener noreferrer">{profile.imageCredit || "Wikimedia Commons"}</a></p>}
           <p className="detail-headline">{profile.headline}</p>
           <div className="detail-meta">
             <span>
@@ -912,7 +900,7 @@ function DetailModal({ profile, onClose }) {
             {profile.latitude !== null && profile.longitude !== null && (
               <a
                 className="button button-outline"
-                href={`https://www.openstreetmap.org/?mlat=${profile.latitude}&mlon=${profile.longitude}#map=16/${profile.latitude}/${profile.longitude}`}
+                href={`https://www.google.com/maps/search/?api=1&query=${profile.latitude}%2C${profile.longitude}`}
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -925,6 +913,24 @@ function DetailModal({ profile, onClose }) {
               Este perfil es una demostración. Los datos de contacto no están
               disponibles.
             </p>
+          )}
+          {profile.sourceUrl && <p className="source-note">Datos iniciales: <a href={profile.sourceUrl} target="_blank" rel="noopener noreferrer">{profile.sourceName}</a>. Confirmá actividades y contacto con el club antes de asistir.</p>}
+          {profile.sourceKey && profile.verification !== "VERIFIED" && (
+            <section className="claim-panel">
+              <h3>¿Representás a este club?</h3>
+              <p>Reclamá la ficha para actualizar datos, publicar actividades y contar lo que sucede en tu comunidad.</p>
+              <p><a href="/para-clubes.html" target="_blank" rel="noopener noreferrer">Conocé cómo funciona para los clubes ↗</a></p>
+              {!user ? <button className="button button-primary" onClick={() => onAuth("register")}>Crear cuenta para reclamar</button>
+                : !["CLUB", "FEDERATION"].includes(user.role) ? <p>Usá una cuenta de club u organización para solicitar la verificación.</p>
+                  : !claimOpen ? <button className="button button-primary" onClick={() => setClaimOpen(true)}>Reclamar esta ficha</button>
+                    : <form onSubmit={submitClaim}>
+                      <label>¿Cómo comprobamos tu vínculo con el club?
+                        <textarea minLength={30} maxLength={1000} required value={evidence} onChange={(event) => setEvidence(event.target.value)} placeholder="Contanos tu función, sitio institucional o un contacto oficial para verificarlo." />
+                      </label>
+                      <button className="button button-primary" disabled={claimBusy}>{claimBusy ? "Enviando..." : "Enviar a revisión"}</button>
+                    </form>}
+              {claimMessage && <p role="status">{claimMessage}</p>}
+            </section>
           )}
         </div>
       </div>
@@ -995,7 +1001,7 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
     try {
       const data = await api("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email: draft.email, password: draft.password }),
+        body: JSON.stringify({ email: draft.email, password: draft.password, code: draft.code }),
       });
       onSuccess(data.user);
     } catch (issue) {
@@ -1026,6 +1032,7 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
         phone: role === "ATHLETE" ? null : draft.phone,
         instagram: draft.instagram,
         website: draft.website,
+        imageUrl: draft.imageUrl,
         details: Object.fromEntries(
           roleFields[role].map((field) => [
             field.name,
@@ -1104,6 +1111,11 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
                 }}
                 value={draft.password}
                 onChange={(value) => change("password", value)}
+              />
+              <FormField
+                field={{ label: "Código de 6 dígitos (solo administración)", inputMode: "numeric" }}
+                value={draft.code || ""}
+                onChange={(value) => change("code", value)}
               />
               {error && (
                 <div className="feedback error" role="alert">
@@ -1364,6 +1376,11 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
                           value={draft.website}
                           onChange={(value) => change("website", value)}
                         />
+                        <FormField
+                          field={{ label: "URL HTTPS de una foto propia o autorizada" }}
+                          value={draft.imageUrl || ""}
+                          onChange={(value) => change("imageUrl", value)}
+                        />
                       </>
                     )}
                   </div>
@@ -1471,6 +1488,7 @@ function MemberProfile({ user, onUpdate, onExplore }) {
           phone: draft.phone,
           instagram: draft.instagram,
           website: draft.website,
+          imageUrl: draft.imageUrl,
         }),
       });
       onUpdate({ ...user, profile: data.profile });
@@ -1640,6 +1658,11 @@ function MemberProfile({ user, onUpdate, onExplore }) {
                         setDraft({ ...draft, website: value })
                       }
                     />
+                    <FormField
+                      field={{ label: "URL HTTPS de una foto propia o autorizada" }}
+                      value={draft.imageUrl || ""}
+                      onChange={(value) => setDraft({ ...draft, imageUrl: value })}
+                    />
                   </>
                 )}
               </div>
@@ -1685,17 +1708,73 @@ function MemberProfile({ user, onUpdate, onExplore }) {
   );
 }
 
-function Admin({ user }) {
+function Admin({ user, onUpdate }) {
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const [search, setSearch] = useState("");
+  const [editing, setEditing] = useState(null);
+  const [mfaPassword, setMfaPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaSetup, setMfaSetup] = useState(null);
   const load = () =>
     api("/admin/overview")
       .then(setOverview)
       .catch((issue) => setError(issue.message));
   useEffect(() => {
-    if (user?.role === "ADMIN") load();
+    if (user?.role === "ADMIN" && user.mfaEnabled) load();
   }, [user]);
+  const startMfa = async (event) => {
+    event.preventDefault();
+    setError("");
+    try {
+      setMfaSetup(await api("/admin/mfa/setup", { method: "POST", body: JSON.stringify({ password: mfaPassword }) }));
+    } catch (issue) { setError(issue.message); }
+  };
+  const confirmMfa = async (event) => {
+    event.preventDefault();
+    setError("");
+    try {
+      await api("/admin/mfa/confirm", { method: "POST", body: JSON.stringify({ code: mfaCode }) });
+      onUpdate({ ...user, mfaEnabled: true });
+    } catch (issue) { setError(issue.message); }
+  };
+  const decideClaim = async (id, decision) => {
+    setBusy(id);
+    setError("");
+    try {
+      await api(`/admin/claims/${id}`, { method: "PATCH", body: JSON.stringify({ decision }) });
+      await load();
+    } catch (issue) { setError(issue.message); }
+    finally { setBusy(""); }
+  };
+  const saveEdit = async (event) => {
+    event.preventDefault();
+    setBusy(editing.id);
+    setError("");
+    try {
+      await api(`/admin/profile-data/${editing.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ ...editing, sports: typeof editing.sports === "string" ? editing.sports.split(",").map((sport) => sport.trim()) : editing.sports }),
+      });
+      setEditing(null);
+      await load();
+    } catch (issue) { setError(issue.message); }
+    finally { setBusy(""); }
+  };
+  const downloadExport = async (format) => {
+    setError("");
+    try {
+      const response = await fetch(`/api/admin/export/${format}`, { credentials: "same-origin" });
+      if (!response.ok) throw new Error((await response.json()).error || "No pudimos descargar el padrón.");
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `iidca-padron.${format}`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (issue) { setError(issue.message); }
+  };
   const setStatus = async (id, status) => {
     setBusy(id);
     setError("");
@@ -1720,12 +1799,33 @@ function Admin({ user }) {
         </div>
       </main>
     );
+  if (!user.mfaEnabled)
+    return (
+      <main className="container dashboard-page mfa-setup-page">
+        <div className="dashboard-card mfa-setup-card">
+          <LockKeyhole size={34} />
+          <h1>Protegé el padrón de IIDCA</h1>
+          <p>Antes de abrir la administración, vinculá una aplicación de autenticación. Vas a usar un código de seis dígitos al ingresar.</p>
+          {error && <div className="feedback error" role="alert">{error}</div>}
+          {!mfaSetup ? <form onSubmit={startMfa}>
+            <label>Confirmá tu contraseña <input type="password" required value={mfaPassword} onChange={(event) => setMfaPassword(event.target.value)} /></label>
+            <button className="button button-primary">Configurar verificación</button>
+          </form> : <form onSubmit={confirmMfa}>
+            <img className="mfa-qr" src={mfaSetup.qr} alt="Código QR para la aplicación de autenticación" />
+            <p>Escaneá el QR o cargá esta clave manualmente: <code>{mfaSetup.secret}</code></p>
+            <label>Código de seis dígitos <input inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required value={mfaCode} onChange={(event) => setMfaCode(event.target.value)} /></label>
+            <button className="button button-primary">Activar y entrar al panel</button>
+          </form>}
+        </div>
+      </main>
+    );
   const pending =
     overview?.profiles.filter((profile) => profile.status === "PENDING")
       .length || 0;
   const published =
     overview?.profiles.filter((profile) => profile.status === "PUBLISHED")
       .length || 0;
+  const visibleProfiles = (overview?.profiles || []).filter((profile) => `${profile.name} ${profile.city} ${profile.neighborhood || ""} ${profile.accountEmail || ""}`.toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es")));
   return (
     <main className="dashboard-page admin-page">
       <div className="container dashboard-container">
@@ -1734,7 +1834,7 @@ function Admin({ user }) {
           <h1>
             La comunidad, <em>de cerca.</em>
           </h1>
-          <p>Revisá perfiles y mantené actualizado el directorio público.</p>
+          <p>Revisá clubes, reclamaciones y datos de contacto para el trabajo de IIDCA.</p>
         </div>
         {error && (
           <div className="feedback error" role="alert">
@@ -1758,15 +1858,35 @@ function Admin({ user }) {
             <ShieldCheck size={25} />
           </div>
         </div>
+        <section className="dashboard-card admin-tools">
+          <div>
+            <h2>Padrón privado</h2>
+            <p>Los datos completos y las exportaciones son exclusivos para administración.</p>
+          </div>
+          <div className="admin-export-actions">
+            <button className="button button-outline" onClick={() => downloadExport("xlsx")}>Descargar Excel</button>
+            <button className="button button-outline" onClick={() => downloadExport("pdf")}>Descargar PDF</button>
+          </div>
+        </section>
+        <section className="dashboard-card admin-claims">
+          <div className="admin-list-heading"><h2>Reclamos por verificar</h2><span>{overview?.claims?.length || 0} pendientes</span></div>
+          {overview?.claims?.length ? overview.claims.map((claim) => (
+            <article className="admin-claim" key={claim.id}>
+              <div><strong>{claim.profileName}</strong><p>Solicita: {claim.applicantName || claim.applicant} · {claim.applicant}</p><blockquote>{claim.evidence}</blockquote></div>
+              <div className="admin-row-actions"><button disabled={busy === claim.id} onClick={() => decideClaim(claim.id, "APPROVED")}>Aprobar vínculo</button><button disabled={busy === claim.id} onClick={() => decideClaim(claim.id, "REJECTED")}>Rechazar</button></div>
+            </article>
+          )) : <p>No hay reclamos pendientes.</p>}
+        </section>
         <section className="dashboard-card admin-list">
           <div className="admin-list-heading">
             <h2>Perfiles de la plataforma</h2>
-            <span>{overview?.profiles.length || 0} registros recientes</span>
+            <span>{overview?.profiles.length || 0} registros</span>
           </div>
+          <label className="admin-search">Buscar por nombre, zona o cuenta <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ej. Club Ferro, Caballito" /></label>
           {!overview ? (
             <p>Cargando perfiles...</p>
           ) : (
-            overview.profiles.map((profile) => (
+            visibleProfiles.map((profile) => (
               <div className="admin-row" key={profile.id}>
                 <div className="admin-row-icon">
                   {roleIcon(profile.category, 21)}
@@ -1777,6 +1897,8 @@ function Admin({ user }) {
                     {categoryLabel(profile.category)} · {profile.city}
                     {profile.isDemo ? " · Ejemplo" : ""}
                   </span>
+                  <small>{profile.verification === "VERIFIED" ? "Verificado" : profile.verification === "CLAIM_PENDING" ? "Reclamo pendiente" : "Sin verificar"} · {profile.sourceName || "Registro propio"}</small>
+                  {(profile.accountEmail || profile.sourceContact?.email || profile.sourceContact?.phone) && <small>Contacto interno: {[profile.accountEmail, profile.sourceContact?.email, profile.sourceContact?.phone].filter(Boolean).join(" · ")}</small>}
                 </div>
                 <span
                   className={`status-badge status-${profile.status.toLowerCase()}`}
@@ -1789,6 +1911,7 @@ function Admin({ user }) {
                 </span>
                 {profile.category !== "ATHLETE" && (
                   <div className="admin-row-actions">
+                    <button onClick={() => setEditing({ ...profile, sports: profile.sports.join(", ") })}>Editar</button>
                     {profile.status !== "PUBLISHED" && (
                       <button
                         disabled={busy === profile.id}
@@ -1811,6 +1934,15 @@ function Admin({ user }) {
             ))
           )}
         </section>
+        {editing && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setEditing(null)}>
+          <form className="admin-edit-modal" onSubmit={saveEdit} role="dialog" aria-modal="true" aria-label={`Editar ${editing.name}`}>
+            <button type="button" className="modal-close" onClick={() => setEditing(null)} aria-label="Cerrar"><X /></button>
+            <h2>Editar ficha</h2>
+            <p>Los cambios quedan registrados en la auditoría.</p>
+            {[["name", "Nombre"], ["city", "Ciudad"], ["neighborhood", "Barrio"], ["address", "Dirección"], ["sports", "Deportes separados por comas"], ["website", "Sitio web"], ["imageUrl", "Foto HTTPS"]].map(([key, label]) => <label key={key}>{label}<input value={editing[key] || ""} onChange={(event) => setEditing({ ...editing, [key]: event.target.value })} /></label>)}
+            <button className="button button-primary" disabled={busy === editing.id}>Guardar cambios</button>
+          </form>
+        </div>}
       </div>
     </main>
   );
@@ -1838,6 +1970,8 @@ function Footer({ onNavigate, onAuth }) {
         </div>
         <div className="footer-links">
           <strong>Participá</strong>
+          <a href="/para-clubes.html">Presentación para clubes</a>
+          <a href="/creditos-fotos.html">Créditos de fotografía</a>
           <button onClick={() => onAuth("register")}>Crear un perfil</button>
           <button onClick={() => onAuth("login")}>Ingresar</button>
           <span>Proyecto piloto · Ciudad de Buenos Aires</span>
@@ -1977,7 +2111,7 @@ export default function App() {
             </div>
           </main>
         ))}
-      {view === "admin" && <Admin user={user} />}
+      {view === "admin" && <Admin user={user} onUpdate={setUser} />}
       <Footer onNavigate={navigate} onAuth={setAuthMode} />
       <AuthModal
         key={authMode || "closed"}
@@ -1989,6 +2123,8 @@ export default function App() {
       <DetailModal
         profile={selectedProfile}
         onClose={() => setSelectedProfile(null)}
+        user={user}
+        onAuth={setAuthMode}
       />
     </>
   );

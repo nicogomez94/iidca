@@ -1,49 +1,46 @@
-# IIDCA Social Club · Etapa 1
+# IIDCA Social Club
 
-Aplicación responsive para conectar personas con clubes, profesionales, federaciones y marcas aliadas. El piloto está enfocado en la Ciudad de Buenos Aires y sigue la misión del manifiesto de IIDCA: acercar oportunidades de práctica deportiva.
+Aplicación responsive para acercar personas a oportunidades deportivas. Su tono y sus funciones siguen el manifiesto de IIDCA. El directorio público reúne clubes de la Ciudad de Buenos Aires y permite que una organización reclame y mantenga su ficha.
 
-## Qué incluye
+## Funciones
 
-- Registro e ingreso con cinco tipos de perfil: deportista social, club, profesional, federación y marca aliada.
-- Perfil personal editable. Los perfiles de deportistas no se muestran públicamente.
-- Directorio público con búsqueda por deporte, ubicación y categoría.
-- Fichas con actividades, información institucional, contacto autorizado y ubicación.
-- Mapa interactivo con OpenStreetMap, búsqueda cercana con geolocalización y selección manual de punto para organizaciones.
-- Panel administrativo básico para revisar, publicar y ocultar perfiles públicos.
+- Inicio con fotografías de personas practicando deporte y navegación accesible en celular y escritorio.
+- Directorio con búsqueda por deporte, ubicación y categoría, vista de listado y Google Maps, geolocalización opcional y fichas con actividades, dirección, fuente y estado de verificación.
+- Padrón inicial de 310 clubes reales obtenido de [Buenos Aires Data · Clubes](https://data.buenosaires.gob.ar/es_AR/dataset/clubes). La importación es repetible, registra procedencia y fecha, y evita duplicados por identificador de fuente o nombre y dirección.
+- Imágenes de sedes reales para clubes destacados y fotografías del deporte correspondiente para el resto, rotuladas como **Foto ilustrativa**. [Créditos y licencias](public/creditos-fotos.html) se generan con `npm run build` a partir de `data/image-credits.json`.
+- Registro e ingreso de deportistas, clubes, profesionales, federaciones y marcas. Los perfiles de deportistas son privados. Los perfiles públicos nuevos requieren aprobación.
+- Solicitud de titularidad de una ficha por una organización registrada, con evidencia revisada por el administrador. La aprobación vincula la ficha a su cuenta y permite editarla.
+- Panel administrador con autenticación de dos factores TOTP, gestión de solicitudes y fichas, bitácora de cambios y exportaciones privadas en Excel y PDF.
+- [Presentación para clubes](public/para-clubes.html) para compartir el funcionamiento de la plataforma.
 
-Las seis fichas iniciales son ficticias, están marcadas como **Ejemplo** y se cargan solo con `npm run db:seed`. No hay chat, puntos, rankings, torneos, pagos ni funciones avanzadas de la Etapa 2.
+Las fichas importadas están marcadas como **Aún no verificada** hasta que IIDCA apruebe su titularidad o revise sus datos. La fuente original y las imágenes pueden cambiar; el contacto tomado del padrón queda privado hasta que la organización autorice su publicación. Las fotos deportivas genéricas son ilustrativas y nunca se presentan como fotografías de una sede particular.
 
-## Requisitos
+## Requisitos y desarrollo
 
-- Node.js 20.19 o superior
-- PostgreSQL local
+- Node.js 20.19 o superior y PostgreSQL.
+- `npm ci`
+- Crear la base `iidca_social_club`, copiar `.env.example` a `.env` y configurar `DATABASE_URL` y un `JWT_SECRET` aleatorio de al menos 32 caracteres.
+- `npm run db:deploy && npm run db:seed`
+- `npm run dev` y abrir [http://127.0.0.1:5173](http://127.0.0.1:5173).
 
-## Instalar y ejecutar
+`npm run db:seed` carga el snapshot reproducible `data/clubes-caba.json`. Para actualizar el padrón desde su fuente oficial, usar `npm run db:import-clubs` y revisar el resultado. La importación conserva fichas verificadas o reclamadas y sus cambios de imagen. Los seis ejemplos ficticios de la primera versión se eliminan al sembrar datos.
 
-1. Instalá dependencias con `npm install`.
-2. Creá una base PostgreSQL llamada `iidca_social_club`.
-3. Copiá `.env.example` a `.env` y configurá `DATABASE_URL` y un `JWT_SECRET` aleatorio de al menos 32 caracteres.
-4. Ejecutá `npm run db:migrate` y, si querés datos de demostración, `npm run db:seed`.
-5. Iniciá con `npm run dev` y abrí [http://127.0.0.1:5173](http://127.0.0.1:5173).
+Para crear un administrador, agregar temporalmente `ADMIN_EMAIL` y `ADMIN_PASSWORD` (mínimo 12 caracteres) a `.env`, ejecutar `npm run admin:create` y eliminar la contraseña del archivo. En el primer ingreso, el panel guía la activación de TOTP mediante una aplicación autenticadora. Después, cada ingreso administrador requiere el código de seis dígitos.
 
-Para crear un administrador, agregá temporalmente `ADMIN_EMAIL` y `ADMIN_PASSWORD` (mínimo 12 caracteres) a `.env`, ejecutá `npm run admin:create` y eliminá `ADMIN_PASSWORD` de `.env` después.
+## Google Maps
 
-Para producción: `VITE_DEBUG=false npm run build`, `npm run db:deploy`, `NODE_ENV=production npm start`. El servidor Express sirve la app compilada y las rutas `/api` desde el mismo origen.
+Con `VITE_GOOGLE_MAPS_API_KEY` configurada, la vista mapa muestra los marcadores de todas las fichas con coordenadas y permite elegir puntos sobre el mapa. La clave necesita la API de Maps JavaScript habilitada y las restricciones de origen adecuadas. Sin clave, la app usa **Google Maps embebido**: se selecciona una ficha del directorio para verla en el mapa; al crear una ficha se pueden ingresar las coordenadas tomadas de Google Maps. Las indicaciones siempre abren Google Maps. El mapa embebido no muestra simultáneamente todos los marcadores propios.
 
-## Sitio publicado
+## Producción y publicación
 
-La instancia de producción está en [https://149.34.224.87/](https://149.34.224.87/). Usa recursos propios en el VPS `hosting`: usuario `site-iidca`, base `iidca_social_club`, servicio `iidca-social-club.service` y directorio `/var/www/sites/iidca-social-club`. nginx sirve el frontend y envía `/api` al servidor Express en `127.0.0.1:3013`.
+La instancia está en [https://149.34.224.87/](https://149.34.224.87/). En `hosting` solo usa `/var/www/sites/iidca-social-club`, el usuario `site-iidca`, la base `iidca_social_club`, el servicio `iidca-social-club.service` y el upstream `127.0.0.1:3013`. Los secretos están en `/var/www/sites/iidca-social-club/shared/app.env`, fuera del código sincronizado. nginx sirve el frontend y envía `/api` al servidor Express. La IP tiene una renovación HTTPS independiente mediante `iidca-ip-cert-renew.timer`.
 
-El Git local tiene dos remotos: `origin` apunta al [repositorio público en GitHub](https://github.com/nicogomez94/iidca) y `hosting` al repositorio `hosting:/var/www/sites/iidca-social-club/repo.git`, aislado del código en ejecución. Para publicar cambios desde esta carpeta, hacé el commit y ejecutá `bash scripts/deploy-hosting.sh`. El script exige un árbol de trabajo limpio, pushea a GitHub y al Git del VPS, copia solo este proyecto, instala dependencias, aplica las migraciones, compila y reinicia únicamente el servicio de IIDCA. El archivo de secretos del VPS está fuera de la aplicación, en `/var/www/sites/iidca-social-club/shared/app.env`, y no se sincroniza.
+El Git local tiene `origin` para [GitHub](https://github.com/nicogomez94/iidca) y `hosting` para el Git aislado del VPS. Con el árbol limpio y los cambios confirmados, `bash scripts/deploy-hosting.sh` pushea ambos remotos, sincroniza solo IIDCA, instala dependencias, aplica migraciones, compila y reinicia su servicio. La carga del padrón se ejecuta luego con `ssh hosting 'runuser -u site-iidca -- sh -c "cd /var/www/sites/iidca-social-club/app && npm run db:seed"'`.
 
-El certificado HTTPS de la IP tiene una renovación independiente mediante `iidca-ip-cert-renew.timer`. El directorio de producción incluye seis fichas ficticias publicadas con la etiqueta **Ejemplo**. Los perfiles públicos nuevos aparecen cuando un administrador los aprueba; los de deportistas permanecen privados.
+`bash scripts/install-hosting-backup.sh` instala una copia diaria exclusiva de esta base en `shared/backups`, verifica que `pg_restore` pueda leer el archivo y conserva 14 días. Se recomienda probar una restauración en una base separada antes de depender de estas copias. Las exportaciones del administrador son adicionales a ese respaldo.
 
-Durante el piloto, los formularios de registro se precargan con datos ficticios también al entrar por [https://149.34.224.87/](https://149.34.224.87/). El registro genera un email distinto cada vez y carga valores acordes al tipo de perfil; el ingreso reutiliza el email de la última cuenta de prueba creada en esa pestaña. Las confirmaciones de edad y publicación se marcan manualmente. La búsqueda inicial muestra todas las fichas de ejemplo de Ciudad de Buenos Aires. El build usa `VITE_TESTING_DEFAULT=true`; para desactivar la precarga, cambialo a `false` en el script de despliegue.
+El despliegue actual mantiene `VITE_TESTING_DEFAULT=true`: los formularios de registro aparecen precargados con datos ficticios editables para facilitar las pruebas; las confirmaciones de edad y publicación se completan manualmente. Para desactivar esa precarga, cambiarlo a `false` en el script de despliegue. `VITE_DEBUG=false` se mantiene en producción.
 
-## Notas de implementación
+## Privacidad
 
-- Los perfiles públicos nuevos requieren aprobación del administrador. Las fichas de deportistas permanecen privadas.
-- El contacto público solo se recoge si el titular autoriza su publicación. Identificadores legales y datos internos de registro no se incluyen en la API pública.
-- La ubicación exacta en el mapa es opcional y la elige quien crea el perfil. La búsqueda por barrio funciona sin coordenadas.
-- La geolocalización del navegador requiere permiso del visitante y, fuera de localhost, un sitio servido con HTTPS.
-- `.env.local` contiene `VITE_DEBUG=true` para prellenar formularios con datos ficticios durante desarrollo; el build de producción debe definir `VITE_DEBUG=false`.
+Las coordenadas exactas de una ficha son opcionales. El navegador pide permiso antes de usar la geolocalización y requiere HTTPS fuera de localhost. La API pública excluye contactos importados, identificadores de cuentas, solicitudes de titularidad y bitácora. Las exportaciones privadas requieren una sesión administradora con MFA. Las fichas de deportistas nunca entran al directorio público.

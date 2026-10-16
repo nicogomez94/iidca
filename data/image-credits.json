@@ -1,0 +1,164 @@
+{
+  "river": {
+    "path": "/images/clubs/river.jpg",
+    "title": "File:Estadio Monumental (River Plate), Buenos Aires ARG.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Estadio_Monumental_(River_Plate),_Buenos_Aires_ARG.jpg",
+    "author": "Stefano Vigorelli",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "attribution": ""
+  },
+  "san-lorenzo": {
+    "path": "/images/clubs/san-lorenzo.jpg",
+    "title": "File:Estadio Pedro Bidegain.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Estadio_Pedro_Bidegain.jpg",
+    "author": "Marianitens at English Wikipedia",
+    "license": "Public domain",
+    "licenseUrl": "",
+    "attribution": ""
+  },
+  "velez": {
+    "path": "/images/clubs/velez.jpg",
+    "title": "File:Estadio José Amalfitani 2024.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Estadio_Jos%C3%A9_Amalfitani_2024.jpg",
+    "author": "Gonzabar77",
+    "license": "CC0",
+    "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "attribution": ""
+  },
+  "huracan": {
+    "path": "/images/clubs/huracan.jpg",
+    "title": "File:Estadio duco huracan.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Estadio_duco_huracan.jpg",
+    "author": "Autor desconocido",
+    "license": "CC BY 2.5 ar",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.5/ar/deed.en",
+    "attribution": "Gobierno de la Ciudad Autónoma de Buenos Aires"
+  },
+  "argentinos": {
+    "path": "/images/clubs/argentinos.jpg",
+    "title": "File:Argentinos juniors estadio.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Argentinos_juniors_estadio.jpg",
+    "author": "Autor desconocido",
+    "license": "Public domain",
+    "licenseUrl": "",
+    "attribution": ""
+  },
+  "all-boys": {
+    "path": "/images/clubs/all-boys.jpg",
+    "title": "File:Estadio Islas Malvinas.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Estadio_Islas_Malvinas.jpg",
+    "author": "User:Albouser. Up-Self made",
+    "license": "Public domain",
+    "licenseUrl": "",
+    "attribution": ""
+  },
+  "ferro": {
+    "path": "/images/clubs/ferro.jpg",
+    "title": "File:Estadio Ferro 2023.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Estadio_Ferro_2023.jpg",
+    "author": "Facundo Diez",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "attribution": ""
+  },
+  "geba": {
+    "path": "/images/clubs/geba.jpg",
+    "title": "File:Club geba sede sanmartin.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Club_geba_sede_sanmartin.jpg",
+    "author": "Autor desconocido",
+    "license": "CC BY 2.5 ar",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.5/ar/deed.en",
+    "attribution": "Gobierno de la Ciudad Autónoma de Buenos Aires"
+  },
+  "basketball": {
+    "path": "/images/sports/basketball.jpg",
+    "title": "File:Basketball players 1.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Basketball_players_1.jpg",
+    "author": "James Moore200",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "attribution": ""
+  },
+  "volleyball": {
+    "path": "/images/sports/volleyball.jpg",
+    "title": "File:Volleyball Players 02.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Volleyball_Players_02.jpg",
+    "author": "Victoriaatoriaa",
+    "license": "CC0",
+    "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "attribution": ""
+  },
+  "running": {
+    "path": "/images/sports/running.jpg",
+    "title": "File:Large group running girls.JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:Large_group_running_girls.JPG",
+    "author": "Peter van der Sluijs",
+    "license": "CC BY-SA 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+    "attribution": ""
+  },
+  "wheelchair": {
+    "path": "/images/sports/wheelchair.jpg",
+    "title": "File:Germany vs Japan women's wheelchair basketball team at the Sports Centre(IMG 3486).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Germany_vs_Japan_women%27s_wheelchair_basketball_team_at_the_Sports_Centre(IMG_3486).jpg",
+    "author": "Bidgee",
+    "license": "CC BY-SA 3.0 au",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/au/deed.en",
+    "attribution": "Bidgee"
+  },
+  "boca": {
+    "path": "/images/clubs/boca.jpg",
+    "title": "File:Vista aérea del Estadio Alberto J. Armando \"La Bombonera\" 01.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Vista_a%C3%A9rea_del_Estadio_Alberto_J._Armando_%22La_Bombonera%22_01.jpg",
+    "author": "ProtoplasmaKid",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "attribution": ""
+  },
+  "football": {
+    "path": "/images/sports/football.jpg",
+    "title": "File:Women in sport playing football 02.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Women_in_sport_playing_football_02.jpg",
+    "author": "Francis ackson soko",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "attribution": ""
+  },
+  "tennis": {
+    "path": "/images/sports/tennis.jpg",
+    "title": "File:A tennis player.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:A_tennis_player.jpg",
+    "author": "Sunnyjoe035",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "attribution": ""
+  },
+  "swimming": {
+    "path": "/images/sports/swimming.jpg",
+    "title": "File:141100 - Swimming Alex Harris action - 3b - 2000 Sydney event photo.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:141100_-_Swimming_Alex_Harris_action_-_3b_-_2000_Sydney_event_photo.jpg",
+    "author": "Sport the library",
+    "license": "CC BY-SA 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+    "attribution": "Australian Paralympic Committee"
+  },
+  "boxing": {
+    "path": "/images/sports/boxing.jpg",
+    "title": "File:Boxer training.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Boxer_training.jpg",
+    "author": "Dotun55",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "attribution": ""
+  },
+  "gymnastics": {
+    "path": "/images/sports/gymnastics.jpg",
+    "title": "File:2014 Acrobatic Gymnastics World Championships - Women's pair - Qualifications - Belgium 02.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:2014_Acrobatic_Gymnastics_World_Championships_-_Women%27s_pair_-_Qualifications_-_Belgium_02.jpg",
+    "author": "Pierre-Yves Beaudouin",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "attribution": ""
+  }
+}
