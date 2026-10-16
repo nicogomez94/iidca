@@ -84,7 +84,7 @@ export function createRegistrationDefaults(role = "ATHLETE") {
 export function createLoginDefaults(adminPortal = false) {
   if (!testingMode) return {};
   return {
-    email: adminPortal ? "admin@iidca.test" : window.sessionStorage.getItem("iidcaTestEmail") || "test@iidca.test",
+    email: adminPortal ? "admin@iidca.com.ar" : window.sessionStorage.getItem("iidcaTestEmail") || "test@iidca.test",
     password: "",
   };
 }

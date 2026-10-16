@@ -114,6 +114,11 @@ try {
       create: { email: "admin@iidca.test", passwordHash, role: "ADMIN" },
     });
     await prisma.user.upsert({
+      where: { email: "admin@iidca.com.ar" },
+      update: {},
+      create: { email: "admin@iidca.com.ar", passwordHash, role: "ADMIN" },
+    });
+    await prisma.user.upsert({
       where: { email: "test@iidca.test" },
       update: {},
       create: {
