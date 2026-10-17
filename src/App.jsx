@@ -889,9 +889,15 @@ function IdleDirectory({ onLocate, locating, geoError }) {
           <span className="map-topbar-kicker">EXPLORÁ EN EL MAPA</span>
           <strong>Tu próximo lugar puede estar cerca.</strong>
         </div>
-        <span className="map-total">
-          <MapPin size={16} /> Listo para explorar
-        </span>
+        <button
+          className="map-idle-top-action"
+          type="button"
+          onClick={onLocate}
+          disabled={locating}
+        >
+          <LocateFixed size={18} />
+          {locating ? "Buscando tu ubicación..." : "Encontrar cerca de mi ubicación"}
+        </button>
       </div>
       <div className="map-idle-canvas">
         <div className="map-idle-grid" aria-hidden="true" />
@@ -902,11 +908,7 @@ function IdleDirectory({ onLocate, locating, geoError }) {
           <span className="map-idle-kicker">EMPEZÁ POR VOS</span>
           <h3>Encontrá deporte cerca tuyo.</h3>
           <p>Buscamos clubes, profesionales y otras entidades publicadas a 5 km de tu ubicación.</p>
-          <button className="button button-orange" type="button" onClick={onLocate} disabled={locating}>
-            <LocateFixed size={19} />
-            {locating ? "Buscando tu ubicación..." : "Encontrar cerca de mi ubicación"}
-          </button>
-          <small>También podés elegir un deporte, ubicación o categoría en el buscador de arriba.</small>
+          <small>Usá el botón naranja o elegí un deporte, ubicación o categoría en el buscador de arriba.</small>
           {geoError && (
             <div className="map-idle-error" role="alert">{geoError}</div>
           )}

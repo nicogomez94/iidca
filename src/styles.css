@@ -2977,6 +2977,27 @@ em {
   background: #e8edf0;
 }
 
+.map-idle-top-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 43px;
+  padding: 9px 15px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--orange);
+  color: var(--navy);
+  font-family: "Outfit", sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: transform .2s, background .2s;
+}
+
+.map-idle-top-action:hover { transform: translateY(-2px); background: #ffb230; }
+.map-idle-top-action:disabled { cursor: wait; opacity: .72; }
+
 .map-idle-grid {
   position: absolute;
   z-index: -1;
@@ -3453,7 +3474,7 @@ em {
   .map-idle-canvas { min-height: 465px; padding: 16px; }
   .map-idle-content { padding: 27px 20px; }
   .map-idle-content h3 { font-size: 29px; }
-  .map-idle-content .button { width: 100%; font-size: 13px; }
+  .map-idle-top-action { width: 100%; white-space: normal; }
   .hero-visual { margin-right: 11px; box-shadow: 11px 11px 0 #ff9d00; }
   .hero-sticker { animation: none; }
   .purpose-inner { padding-block: 18px; }
