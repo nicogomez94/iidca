@@ -3155,24 +3155,20 @@ em {
 }
 
 .map-selected-card {
-  position: absolute;
-  z-index: 2;
-  left: 18px;
-  bottom: 18px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  width: min(390px, calc(100% - 36px));
-  padding: 10px;
-  border-radius: 11px;
-  background: #fff;
-  box-shadow: 0 10px 35px #090c7040;
+  flex: none;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border-bottom: 1px solid #e1e4f0;
+  background: #fff6e7;
 }
 
 .map-selected-card img {
   flex: none;
-  width: 74px;
-  height: 64px;
+  width: 58px;
+  height: 58px;
   border-radius: 6px;
   object-fit: cover;
 }
@@ -3181,6 +3177,7 @@ em {
   display: grid;
   gap: 2px;
   min-width: 0;
+  flex: 1;
 }
 
 .map-selected-card span {
@@ -3191,12 +3188,13 @@ em {
 }
 
 .map-selected-card strong {
+  display: -webkit-box;
   overflow: hidden;
   color: var(--navy);
   font-size: 14px;
   line-height: 1.15;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .map-selected-card small {
@@ -3204,7 +3202,19 @@ em {
   font-size: 11px;
 }
 
-.map-selected-card button {
+.map-selected-card .map-see-all {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--navy);
+  font-size: 11px;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.map-selected-card .map-selected-detail {
   display: grid;
   place-items: center;
   flex: none;

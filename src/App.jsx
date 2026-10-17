@@ -708,10 +708,10 @@ function ProfileCard({ profile, onOpen }) {
   );
 }
 
-function FitGoogleMap({ profiles, location }) {
+function FitGoogleMap({ profiles, location, focusId }) {
   const map = useMap();
   useEffect(() => {
-    if (!map || !window.google?.maps) return;
+    if (!map || !window.google?.maps || focusId) return;
     if (profiles.length === 0 && location.lat && location.lng) {
       map.setCenter({ lat: Number(location.lat), lng: Number(location.lng) });
       map.setZoom(12);
@@ -726,7 +726,7 @@ function FitGoogleMap({ profiles, location }) {
     profiles.forEach((profile) => bounds.extend({ lat: profile.latitude, lng: profile.longitude }));
     if (location.lat && location.lng) bounds.extend({ lat: Number(location.lat), lng: Number(location.lng) });
     if (!bounds.isEmpty()) map.fitBounds(bounds, 52);
-  }, [map, profiles, location.lat, location.lng]);
+  }, [map, profiles, location.lat, location.lng, focusId]);
   return null;
 }
 
@@ -735,8 +735,28 @@ function FocusGoogleMap({ profile }) {
   useEffect(() => {
     if (!map || !profile) return;
     map.panTo({ lat: profile.latitude, lng: profile.longitude });
-    map.setZoom(14);
+    map.setZoom(17);
   }, [map, profile]);
+  return null;
+}
+
+function NearbyRadius({ filters }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!map || !filters.lat || !filters.lng || !window.google?.maps?.Circle) return;
+    const circle = new window.google.maps.Circle({
+      map,
+      center: { lat: Number(filters.lat), lng: Number(filters.lng) },
+      radius: Number(filters.radius || 5) * 1000,
+      strokeColor: "#090c70",
+      strokeOpacity: 0.5,
+      strokeWeight: 2,
+      fillColor: "#4656cc",
+      fillOpacity: 0.06,
+      clickable: false,
+    });
+    return () => circle.setMap(null);
+  }, [map, filters.lat, filters.lng, filters.radius]);
   return null;
 }
 
@@ -745,7 +765,14 @@ function normalizeMapText(value) {
 }
 
 const mapSports = ["Fútbol", "Básquet", "Vóley", "Natación", "Tenis", "Gimnasia"];
-const mapPin = (color) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="34" height="43" viewBox="0 0 34 43"><path d="M17 1C8.2 1 1 8.2 1 17c0 11.4 16 24 16 24s16-12.6 16-24C33 8.2 25.8 1 17 1Z" fill="${color}" stroke="white" stroke-width="2"/><circle cx="17" cy="17" r="6" fill="white"/></svg>`)}`;
+const mapPin = (active) => `data:image/svg+xml,${encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="44" height="58" viewBox="0 0 44 58">
+    <path d="M22 2C10.4 2 2 10.6 2 22c0 14 20 33 20 33s20-19 20-33C42 10.6 33.6 2 22 2Z" fill="#090c70" stroke="${active ? "#ff9d00" : "#ffffff"}" stroke-width="3"/>
+    <path d="M12 14 22 11 32 14 30 29 22 35 14 29Z" fill="#ffffff"/>
+    <path d="M16 17 22 15 28 17 27 27 22 31 17 27Z" fill="#090c70"/>
+    <path d="m22 17 1.1 3.1h3.3l-2.7 2 1 3.1-2.7-1.9-2.7 1.9 1-3.1-2.7-2h3.3Z" fill="#ff9d00"/>
+  </svg>
+`)}`;
 
 function DirectoryMap({ profiles, filters, onOpen, onRadiusChange }) {
   const [focused, setFocused] = useState(null);
@@ -774,6 +801,7 @@ function DirectoryMap({ profiles, filters, onOpen, onRadiusChange }) {
     : filters.lat && filters.lng
       ? `${filters.lat},${filters.lng}`
       : `${mapSearch || selectedSport || "deporte"} ${selectedArea || filters.location || "Ciudad de Buenos Aires"}`;
+  const embedZoom = selected ? 17 : 14;
   return (
     <div className="map-frame" aria-label="Mapa y filtros de entidades deportivas">
       <div className="map-topbar">
@@ -785,25 +813,35 @@ function DirectoryMap({ profiles, filters, onOpen, onRadiusChange }) {
           {googleMapsKey ? (
             <APIProvider apiKey={googleMapsKey} language="es" region="AR">
               <GoogleMap defaultCenter={{ lat: -34.6037, lng: -58.3816 }} defaultZoom={11} gestureHandling="cooperative" className="directory-map" mapTypeControl={false} streetViewControl={false} fullscreenControl>
-                <FitGoogleMap profiles={visiblePoints} location={filters} />
+                <FitGoogleMap profiles={visiblePoints} location={filters} focusId={selected?.id} />
                 <FocusGoogleMap profile={selected} />
+                <NearbyRadius filters={filters} />
                 {visiblePoints.map((profile) => (
-                  <Marker key={profile.id} position={{ lat: Number(profile.latitude), lng: Number(profile.longitude) }} icon={mapPin(selected?.id === profile.id ? "#ff9d00" : "#090c70")} title={profile.name} onClick={() => setFocused(profile)} />
+                  <Marker key={profile.id} position={{ lat: Number(profile.latitude), lng: Number(profile.longitude) }} icon={mapPin(selected?.id === profile.id)} zIndex={selected?.id === profile.id ? 100 : 1} title={profile.name} onClick={() => setFocused(profile)} />
                 ))}
               </GoogleMap>
             </APIProvider>
           ) : (
-            <iframe className="directory-map" title="Google Maps: clubes deportivos" src={`https://maps.google.com/maps?q=${encodeURIComponent(embedQuery)}&z=12&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
-          )}
-          {selected && (
-            <div className="map-selected-card">
-              <img src={selected.imageUrl || "/images/sports/running.jpg"} alt="" />
-              <div><span>ESTÁS VIENDO</span><strong>{selected.name}</strong><small>{selected.neighborhood || selected.city}</small></div>
-              <button onClick={() => onOpen(selected)} aria-label={`Ver ficha de ${selected.name}`}><ArrowUpRight size={20} /></button>
-            </div>
+            <iframe className="directory-map" title="Google Maps: entidades deportivas" src={`https://maps.google.com/maps?q=${encodeURIComponent(embedQuery)}&z=${embedZoom}&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
           )}
         </div>
         <aside className="map-sidebar" aria-label="Filtros y resultados del mapa">
+          {selected && (
+            <div className="map-selected-card">
+              <img src={selected.imageUrl || "/images/sports/running.jpg"} alt="" />
+              <div>
+                <span>ESTÁS VIENDO</span>
+                <strong>{selected.name}</strong>
+                <small>{selected.neighborhood || selected.city}</small>
+                <button className="map-see-all" onClick={() => setFocused(null)}>
+                  Ver todos los puntos
+                </button>
+              </div>
+              <button className="map-selected-detail" onClick={() => onOpen(selected)} aria-label={`Ver ficha de ${selected.name}`}>
+                <ArrowUpRight size={19} />
+              </button>
+            </div>
+          )}
           <div className="map-filters">
             <div className="map-filters-heading"><strong>Filtrá tu búsqueda</strong><button onClick={clearMapFilters}>Limpiar</button></div>
             <label className="map-search-field"><Search size={18} /><input value={mapSearch} onChange={(event) => setMapSearch(event.target.value)} placeholder="Club, deporte o barrio" aria-label="Buscar en el mapa" /></label>
