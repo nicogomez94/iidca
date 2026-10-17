@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   APIProvider,
+  ControlPosition,
   Map as GoogleMap,
+  MapControl,
   Marker,
   useMap,
 } from "@vis.gl/react-google-maps";
@@ -760,6 +762,22 @@ function NearbyRadius({ filters }) {
   return null;
 }
 
+function DirectoryZoomControls() {
+  const map = useMap();
+  const changeZoom = (step) => {
+    if (!map) return;
+    map.setZoom(Math.max(3, Math.min(20, (map.getZoom() || 11) + step)));
+  };
+  return (
+    <MapControl position={ControlPosition.TOP_RIGHT}>
+      <div className="map-zoom-controls" role="group" aria-label="Zoom del mapa">
+        <button type="button" onClick={() => changeZoom(1)} aria-label="Acercar mapa" title="Acercar mapa">+</button>
+        <button type="button" onClick={() => changeZoom(-1)} aria-label="Alejar mapa" title="Alejar mapa">−</button>
+      </div>
+    </MapControl>
+  );
+}
+
 function normalizeMapText(value) {
   return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
@@ -812,7 +830,8 @@ function DirectoryMap({ profiles, filters, onOpen, onRadiusChange }) {
         <div className="map-canvas">
           {googleMapsKey ? (
             <APIProvider apiKey={googleMapsKey} language="es" region="AR">
-              <GoogleMap defaultCenter={{ lat: -34.6037, lng: -58.3816 }} defaultZoom={11} gestureHandling="cooperative" className="directory-map" mapTypeControl={false} streetViewControl={false} fullscreenControl>
+              <GoogleMap defaultCenter={{ lat: -34.6037, lng: -58.3816 }} defaultZoom={11} gestureHandling="cooperative" className="directory-map" mapTypeControl={false} streetViewControl={false} zoomControl={false} fullscreenControl>
+                <DirectoryZoomControls />
                 <FitGoogleMap profiles={visiblePoints} location={filters} focusId={selected?.id} />
                 <FocusGoogleMap profile={selected} />
                 <NearbyRadius filters={filters} />
