@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   APIProvider,
   ControlPosition,
@@ -742,6 +743,53 @@ function FocusGoogleMap({ profile }) {
   return null;
 }
 
+function SelectedMapCard({ profile, onOpen, onClose }) {
+  const map = useMap();
+  const [container, setContainer] = useState(null);
+  useEffect(() => {
+    if (!map || !profile || !window.google?.maps?.OverlayView) return;
+    const element = document.createElement("div");
+    element.className = "map-marker-card-anchor";
+    const overlay = new window.google.maps.OverlayView();
+    overlay.onAdd = () => {
+      overlay.getPanes().floatPane.appendChild(element);
+      window.google.maps.OverlayView.preventMapHitsAndGesturesFrom(element);
+      setContainer(element);
+    };
+    overlay.draw = () => {
+      const point = overlay.getProjection().fromLatLngToDivPixel(
+        new window.google.maps.LatLng(Number(profile.latitude), Number(profile.longitude)),
+      );
+      if (point) {
+        element.style.left = `${point.x}px`;
+        element.style.top = `${point.y + 12}px`;
+      }
+    };
+    overlay.onRemove = () => {
+      element.remove();
+      setContainer(null);
+    };
+    overlay.setMap(map);
+    return () => overlay.setMap(null);
+  }, [map, profile]);
+
+  return container ? createPortal(
+    <div className="map-marker-card">
+      <img src={profile.imageUrl || "/images/sports/running.jpg"} alt="" />
+      <div className="map-marker-card-copy">
+        <span>ESTÁS VIENDO</span>
+        <strong>{profile.name}</strong>
+        <small>{profile.neighborhood || profile.city}</small>
+        <button className="map-see-all" onClick={onClose}>Ver todos los puntos</button>
+      </div>
+      <button className="map-selected-detail" onClick={() => onOpen(profile)} aria-label={`Ver ficha de ${profile.name}`}>
+        <ArrowUpRight size={19} />
+      </button>
+    </div>,
+    container,
+  ) : null;
+}
+
 function NearbyRadius({ filters }) {
   const map = useMap();
   useEffect(() => {
@@ -838,29 +886,23 @@ function DirectoryMap({ profiles, filters, onOpen, onRadiusChange }) {
                 {visiblePoints.map((profile) => (
                   <Marker key={profile.id} position={{ lat: Number(profile.latitude), lng: Number(profile.longitude) }} icon={mapPin(selected?.id === profile.id)} zIndex={selected?.id === profile.id ? 100 : 1} title={profile.name} onClick={() => setFocused(profile)} />
                 ))}
+                {selected && <SelectedMapCard profile={selected} onOpen={onOpen} onClose={() => setFocused(null)} />}
               </GoogleMap>
             </APIProvider>
           ) : (
             <iframe className="directory-map" title="Google Maps: entidades deportivas" src={`https://maps.google.com/maps?q=${encodeURIComponent(embedQuery)}&z=${embedZoom}&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
           )}
-        </div>
-        <aside className="map-sidebar" aria-label="Filtros y resultados del mapa">
-          {selected && (
-            <div className="map-selected-card">
-              <img src={selected.imageUrl || "/images/sports/running.jpg"} alt="" />
-              <div>
-                <span>ESTÁS VIENDO</span>
-                <strong>{selected.name}</strong>
-                <small>{selected.neighborhood || selected.city}</small>
-                <button className="map-see-all" onClick={() => setFocused(null)}>
-                  Ver todos los puntos
-                </button>
+          {!googleMapsKey && selected && (
+            <div className="map-marker-card-anchor map-marker-card-fallback">
+              <div className="map-marker-card">
+                <img src={selected.imageUrl || "/images/sports/running.jpg"} alt="" />
+                <div className="map-marker-card-copy"><span>ESTÁS VIENDO</span><strong>{selected.name}</strong><small>{selected.neighborhood || selected.city}</small><button className="map-see-all" onClick={() => setFocused(null)}>Ver todos los puntos</button></div>
+                <button className="map-selected-detail" onClick={() => onOpen(selected)} aria-label={`Ver ficha de ${selected.name}`}><ArrowUpRight size={19} /></button>
               </div>
-              <button className="map-selected-detail" onClick={() => onOpen(selected)} aria-label={`Ver ficha de ${selected.name}`}>
-                <ArrowUpRight size={19} />
-              </button>
             </div>
           )}
+        </div>
+        <aside className="map-sidebar" aria-label="Filtros y resultados del mapa">
           <div className="map-filters">
             <div className="map-filters-heading"><strong>Filtrá tu búsqueda</strong><button onClick={clearMapFilters}>Limpiar</button></div>
             <label className="map-search-field"><Search size={18} /><input value={mapSearch} onChange={(event) => setMapSearch(event.target.value)} placeholder="Club, deporte o barrio" aria-label="Buscar en el mapa" /></label>
