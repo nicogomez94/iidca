@@ -387,7 +387,15 @@ app.get("/api/profiles", async (req, res, next) => {
       req.query.lat !== undefined &&
       req.query.lng !== undefined &&
       Number.isFinite(lat) &&
-      Number.isFinite(lng);
+      Number.isFinite(lng) &&
+      Math.abs(lat) <= 90 &&
+      Math.abs(lng) <= 180;
+    const requestedRadius = Number(req.query.radius);
+    const radiusKm = hasCoordinates
+      ? req.query.radius !== undefined && Number.isFinite(requestedRadius)
+        ? Math.min(100, Math.max(1, requestedRadius))
+        : 5
+      : null;
     const profiles = await prisma.profile.findMany({
       where: {
         status: "PUBLISHED",
@@ -425,14 +433,16 @@ app.get("/api/profiles", async (req, res, next) => {
               distanceKm(lat, lng, profile.latitude, profile.longitude) * 10,
             ) / 10
           : null,
-    }));
+    })).filter((profile) => !hasCoordinates ||
+      (profile.latitude !== null && profile.longitude !== null &&
+        distanceKm(lat, lng, profile.latitude, profile.longitude) <= radiusKm));
     const priority = { CLUB: 0, PROFESSIONAL: 1, FEDERATION: 2, SPONSOR: 3 };
     result.sort((a, b) => {
+      if (hasCoordinates)
+        return (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity);
       if (a.isDemo !== b.isDemo) return Number(a.isDemo) - Number(b.isDemo);
       if (a.verification !== b.verification && (a.verification === "VERIFIED" || b.verification === "VERIFIED"))
         return a.verification === "VERIFIED" ? -1 : 1;
-      if (hasCoordinates)
-        return (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity);
       if (priority[a.category] !== priority[b.category]) return priority[a.category] - priority[b.category];
       if (Boolean(a.imageUrl && !a.imageIllustrative) !== Boolean(b.imageUrl && !b.imageIllustrative))
         return a.imageUrl && !a.imageIllustrative ? -1 : 1;

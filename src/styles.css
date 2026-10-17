@@ -2960,9 +2960,117 @@ em {
 
 /* Google Maps with its own directory controls */
 .map-frame {
+  overflow: hidden;
   border: 1px solid #d8dced;
   border-radius: 16px;
   box-shadow: 0 20px 45px #090c7012;
+}
+
+.map-idle-canvas {
+  position: relative;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+  min-height: 520px;
+  overflow: hidden;
+  padding: 32px;
+  background: #e8edf0;
+}
+
+.map-idle-grid {
+  position: absolute;
+  z-index: -1;
+  inset: -18%;
+  transform: rotate(-13deg) scale(1.15);
+  background:
+    linear-gradient(115deg, transparent 0 42%, #b9dce0 42% 49%, transparent 49% 100%),
+    repeating-linear-gradient(0deg, transparent 0 35px, #fff 35px 42px, transparent 42px 83px),
+    repeating-linear-gradient(90deg, transparent 0 48px, #fff 48px 55px, transparent 55px 111px),
+    #e2e8e5;
+  opacity: .9;
+}
+
+.map-idle-canvas::before,
+.map-idle-canvas::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 220px;
+  height: 220px;
+  border-radius: 44% 56% 61% 39%;
+  background: #c9ddc9;
+  filter: blur(2px);
+}
+
+.map-idle-canvas::before { top: -85px; right: 8%; transform: rotate(21deg); }
+.map-idle-canvas::after { bottom: -115px; left: 6%; transform: rotate(-26deg); }
+
+.map-idle-content {
+  display: grid;
+  justify-items: center;
+  gap: 13px;
+  width: min(100%, 555px);
+  padding: 33px 38px;
+  border: 1px solid #e0e3ee;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 20px 60px #090c7029;
+  color: var(--navy);
+  text-align: center;
+}
+
+.map-idle-icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 17px;
+  background: #fff0d4;
+  color: var(--navy);
+}
+
+.map-idle-kicker {
+  color: var(--red);
+  font-family: "Outfit", sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .16em;
+}
+
+.map-idle-content h3 {
+  margin: 0;
+  font-family: "Outfit", sans-serif;
+  font-size: 38px;
+  line-height: 1.08;
+}
+
+.map-idle-content p {
+  max-width: 420px;
+  margin: 0 0 7px;
+  color: #68718a;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.map-idle-content .button {
+  min-height: 51px;
+  padding-inline: 20px;
+}
+
+.map-idle-content small {
+  max-width: 390px;
+  color: #778098;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.map-idle-error {
+  padding: 10px 13px;
+  border-radius: 8px;
+  background: #fff0ee;
+  color: #9b2630;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .map-topbar {
@@ -3172,6 +3280,41 @@ em {
   margin-top: 12px;
 }
 
+.map-radius-filters {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.map-radius-filters > span {
+  color: #606b8c;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.map-radius-filters > div {
+  display: flex;
+  gap: 6px;
+}
+
+.map-radius-filters button {
+  flex: 1;
+  padding: 7px 8px;
+  border: 1px solid #cfd4e8;
+  border-radius: 7px;
+  background: #fff;
+  color: var(--navy);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.map-radius-filters button:hover,
+.map-radius-filters button.active {
+  border-color: var(--navy);
+  background: var(--navy);
+  color: #fff;
+}
+
 .map-sport-filters button {
   padding: 6px 9px;
   border: 1px solid #cfd4e8;
@@ -3307,6 +3450,10 @@ em {
 }
 
 @media (max-width: 640px) {
+  .map-idle-canvas { min-height: 465px; padding: 16px; }
+  .map-idle-content { padding: 27px 20px; }
+  .map-idle-content h3 { font-size: 29px; }
+  .map-idle-content .button { width: 100%; font-size: 13px; }
   .hero-visual { margin-right: 11px; box-shadow: 11px 11px 0 #ff9d00; }
   .hero-sticker { animation: none; }
   .purpose-inner { padding-block: 18px; }

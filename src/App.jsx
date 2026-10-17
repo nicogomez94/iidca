@@ -50,11 +50,16 @@ const logo = "/logo-iidca.png";
 const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const defaultFilters = {
   sport: "",
-  location: testingMode ? "Ciudad de Buenos Aires" : "",
+  location: "",
   category: "",
   lat: "",
   lng: "",
+  radius: "",
 };
+const hasSearchCriteria = (filters) => Boolean(
+  filters.sport?.trim() || filters.location?.trim() || filters.category ||
+  (filters.lat !== "" && filters.lng !== ""),
+);
 
 function roleIcon(role, size = 22) {
   const props = { size, strokeWidth: 1.8 };
@@ -217,6 +222,7 @@ function SearchForm({ initial = defaultFilters, onSearch, compact = false }) {
       initial.category,
       initial.lat,
       initial.lng,
+      initial.radius,
     ],
   );
 
@@ -225,13 +231,17 @@ function SearchForm({ initial = defaultFilters, onSearch, compact = false }) {
     if (!navigator.geolocation)
       return setGeoError("Tu navegador no admite ubicación.");
     navigator.geolocation.getCurrentPosition(
-      ({ coords }) =>
-        setValues((current) => ({
-          ...current,
+      ({ coords }) => {
+        const next = {
+          ...values,
           location: "",
           lat: String(coords.latitude),
           lng: String(coords.longitude),
-        })),
+          radius: "5",
+        };
+        setValues(next);
+        onSearch(next);
+      },
       () =>
         setGeoError("No pudimos usar tu ubicación. Podés escribir tu barrio."),
       { enableHighAccuracy: false, timeout: 10000 },
@@ -271,6 +281,7 @@ function SearchForm({ initial = defaultFilters, onSearch, compact = false }) {
                 location: event.target.value,
                 lat: "",
                 lng: "",
+                radius: "",
               })
             }
             placeholder={
@@ -285,6 +296,20 @@ function SearchForm({ initial = defaultFilters, onSearch, compact = false }) {
           >
             <LocateFixed size={19} />
           </button>
+          {values.lat && values.lng && (
+            <button
+              type="button"
+              onClick={() => {
+                const next = { ...values, lat: "", lng: "", radius: "" };
+                setValues(next);
+                onSearch(next);
+              }}
+              title="Quitar mi ubicación"
+              aria-label="Quitar mi ubicación"
+            >
+              <X size={17} />
+            </button>
+          )}
         </div>
       </label>
       <label className="search-field">
@@ -687,6 +712,11 @@ function FitGoogleMap({ profiles, location }) {
   const map = useMap();
   useEffect(() => {
     if (!map || !window.google?.maps) return;
+    if (profiles.length === 0 && location.lat && location.lng) {
+      map.setCenter({ lat: Number(location.lat), lng: Number(location.lng) });
+      map.setZoom(12);
+      return;
+    }
     if (profiles.length === 1) {
       map.setCenter({ lat: profiles[0].latitude, lng: profiles[0].longitude });
       map.setZoom(14);
@@ -717,7 +747,7 @@ function normalizeMapText(value) {
 const mapSports = ["Fútbol", "Básquet", "Vóley", "Natación", "Tenis", "Gimnasia"];
 const mapPin = (color) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="34" height="43" viewBox="0 0 34 43"><path d="M17 1C8.2 1 1 8.2 1 17c0 11.4 16 24 16 24s16-12.6 16-24C33 8.2 25.8 1 17 1Z" fill="${color}" stroke="white" stroke-width="2"/><circle cx="17" cy="17" r="6" fill="white"/></svg>`)}`;
 
-function DirectoryMap({ profiles, filters, onOpen }) {
+function DirectoryMap({ profiles, filters, onOpen, onRadiusChange }) {
   const [focused, setFocused] = useState(null);
   const [mapSearch, setMapSearch] = useState("");
   const [selectedSport, setSelectedSport] = useState("");
@@ -741,9 +771,11 @@ function DirectoryMap({ profiles, filters, onOpen }) {
   };
   const embedQuery = selected
     ? `${selected.latitude},${selected.longitude}`
-    : `${mapSearch || selectedSport || "clubes deportivos"} ${selectedArea || filters.location || "Ciudad de Buenos Aires"}`;
+    : filters.lat && filters.lng
+      ? `${filters.lat},${filters.lng}`
+      : `${mapSearch || selectedSport || "deporte"} ${selectedArea || filters.location || "Ciudad de Buenos Aires"}`;
   return (
-    <div className="map-frame" aria-label="Mapa y filtros de clubes">
+    <div className="map-frame" aria-label="Mapa y filtros de entidades deportivas">
       <div className="map-topbar">
         <div><span className="map-topbar-kicker">EXPLORÁ EN EL MAPA</span><strong>Tu próximo lugar puede estar cerca.</strong></div>
         <span className="map-total"><MapPin size={16} /> {visiblePoints.length} ubicaciones</span>
@@ -771,20 +803,37 @@ function DirectoryMap({ profiles, filters, onOpen }) {
             </div>
           )}
         </div>
-        <aside className="map-sidebar" aria-label="Filtros y clubes del mapa">
+        <aside className="map-sidebar" aria-label="Filtros y resultados del mapa">
           <div className="map-filters">
             <div className="map-filters-heading"><strong>Filtrá tu búsqueda</strong><button onClick={clearMapFilters}>Limpiar</button></div>
             <label className="map-search-field"><Search size={18} /><input value={mapSearch} onChange={(event) => setMapSearch(event.target.value)} placeholder="Club, deporte o barrio" aria-label="Buscar en el mapa" /></label>
             <label className="map-area-field"><MapPin size={18} /><select value={selectedArea} onChange={(event) => { setSelectedArea(event.target.value); setFocused(null); }} aria-label="Filtrar por barrio"><option value="">Todos los barrios</option>{areas.map((area) => <option value={area} key={area}>{area}</option>)}</select></label>
+            {filters.lat && filters.lng && (
+              <div className="map-radius-filters" role="group" aria-label="Radio de búsqueda">
+                <span>Distancia desde vos</span>
+                <div>
+                  {[5, 10, 20].map((radius) => (
+                    <button
+                      key={radius}
+                      className={Number(filters.radius || 5) === radius ? "active" : ""}
+                      aria-pressed={Number(filters.radius || 5) === radius}
+                      onClick={() => onRadiusChange(radius)}
+                    >
+                      {radius} km
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="map-sport-filters" aria-label="Filtrar por deporte"><button className={!selectedSport ? "active" : ""} aria-pressed={!selectedSport} onClick={() => { setSelectedSport(""); setFocused(null); }}>Todos</button>{mapSports.map((sport) => <button key={sport} className={selectedSport === sport ? "active" : ""} aria-pressed={selectedSport === sport} onClick={() => { setSelectedSport(sport); setFocused(null); }}>{sport}</button>)}</div>
           </div>
-          <div className="map-list-heading"><strong>{visiblePoints.length} {visiblePoints.length === 1 ? "resultado" : "resultados"}</strong><span>Elegí un club para ubicarlo</span></div>
+          <div className="map-list-heading"><strong>{visiblePoints.length} {visiblePoints.length === 1 ? "resultado" : "resultados"}</strong><span>Elegí una opción para ubicarla</span></div>
           <div className="map-results">
-            {visiblePoints.length === 0 && <div className="map-no-results"><Compass size={27} /><strong>No encontramos clubes con esos filtros.</strong><button onClick={clearMapFilters}>Ver todos los clubes</button></div>}
+            {visiblePoints.length === 0 && <div className="map-no-results"><Compass size={27} /><strong>No encontramos ubicaciones con esos filtros.</strong><button onClick={clearMapFilters}>Limpiar filtros del mapa</button></div>}
             {visiblePoints.map((profile) => (
               <button key={profile.id} className={`map-result ${selected?.id === profile.id ? "selected" : ""}`} onClick={() => setFocused(profile)} aria-pressed={selected?.id === profile.id}>
                 <img src={profile.imageUrl || "/images/sports/running.jpg"} alt="" loading="lazy" />
-                <span><strong>{profile.name}</strong><small><MapPin size={13} />{profile.neighborhood || profile.city}</small><em>{profile.sports?.slice(0, 2).join(" · ") || categoryLabel(profile.category)}</em></span>
+                <span><strong>{profile.name}</strong><small><MapPin size={13} />{profile.neighborhood || profile.city}{profile.distanceKm !== null && profile.distanceKm !== undefined ? ` · ${profile.distanceKm} km` : ""}</small><em>{profile.sports?.slice(0, 2).join(" · ") || categoryLabel(profile.category)}</em></span>
                 <ArrowUpRight size={17} />
               </button>
             ))}
@@ -792,7 +841,7 @@ function DirectoryMap({ profiles, filters, onOpen }) {
         </aside>
       </div>
       <div className="map-caption">
-        <MapPin size={17} /> {googleMapsKey ? "Los marcadores muestran todos los resultados filtrados." : "Elegí un club del listado para ubicarlo en Google Maps."}{" "}
+        <MapPin size={17} /> {googleMapsKey ? "Los marcadores muestran todos los resultados filtrados." : "Elegí una opción del listado para ubicarla en Google Maps."}{" "}
         <span>Mapa: Google Maps</span>
       </div>
     </div>
@@ -832,8 +881,70 @@ function LocationPicker({ latitude, longitude, onChoose }) {
   );
 }
 
+function IdleDirectory({ onLocate, locating, geoError }) {
+  return (
+    <div className="map-frame map-idle" aria-label="Mapa sin resultados hasta iniciar una búsqueda">
+      <div className="map-topbar">
+        <div>
+          <span className="map-topbar-kicker">EXPLORÁ EN EL MAPA</span>
+          <strong>Tu próximo lugar puede estar cerca.</strong>
+        </div>
+        <span className="map-total">
+          <MapPin size={16} /> Listo para explorar
+        </span>
+      </div>
+      <div className="map-idle-canvas">
+        <div className="map-idle-grid" aria-hidden="true" />
+        <div className="map-idle-content">
+          <span className="map-idle-icon">
+            <LocateFixed size={30} strokeWidth={1.8} />
+          </span>
+          <span className="map-idle-kicker">EMPEZÁ POR VOS</span>
+          <h3>Encontrá deporte cerca tuyo.</h3>
+          <p>Buscamos clubes, profesionales y otras entidades publicadas a 5 km de tu ubicación.</p>
+          <button className="button button-orange" type="button" onClick={onLocate} disabled={locating}>
+            <LocateFixed size={19} />
+            {locating ? "Buscando tu ubicación..." : "Encontrar cerca de mi ubicación"}
+          </button>
+          <small>También podés elegir un deporte, ubicación o categoría en el buscador de arriba.</small>
+          {geoError && (
+            <div className="map-idle-error" role="alert">{geoError}</div>
+          )}
+        </div>
+      </div>
+      <div className="map-caption">
+        <MapPin size={17} /> El mapa mostrará resultados cuando inicies una búsqueda.
+      </div>
+    </div>
+  );
+}
+
 function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
   const [layout, setLayout] = useState("map");
+  const [locating, setLocating] = useState(false);
+  const [geoError, setGeoError] = useState("");
+  const active = hasSearchCriteria(filters);
+  const currentRadius = Number(filters.radius || 5);
+  const expandedRadius = currentRadius < 10 ? 10 : currentRadius < 20 ? 20 : null;
+  const locateNearby = () => {
+    setGeoError("");
+    if (!navigator.geolocation) {
+      setGeoError("Tu navegador no admite ubicación. Podés buscar por barrio o ciudad arriba.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setLocating(false);
+        onSearch({ ...defaultFilters, lat: String(coords.latitude), lng: String(coords.longitude), radius: "5" });
+      },
+      () => {
+        setLocating(false);
+        setGeoError("No pudimos obtener tu ubicación. Permití el acceso en el navegador o buscá por barrio o ciudad arriba.");
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
+    );
+  };
   return (
     <main className="explore-page">
       <section className="explore-intro">
@@ -854,9 +965,11 @@ function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
             <div>
               <h2>Directorio deportivo</h2>
               <span>
-                {loading
+                {!active
+                  ? "Elegí cómo empezar a explorar"
+                  : loading
                   ? "Buscando..."
-                  : `${profiles.length} ${profiles.length === 1 ? "opción encontrada" : "opciones encontradas"}`}
+                  : `${profiles.length} ${profiles.length === 1 ? "opción encontrada" : "opciones encontradas"}${filters.lat && filters.lng ? ` a ${currentRadius} km de vos` : ""}`}
               </span>
             </div>
             <div
@@ -885,20 +998,28 @@ function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
               {error}
             </div>
           )}
-          {!loading && !error && profiles.length === 0 && (
+          {active && !loading && !error && profiles.length === 0 && (
             <div className="empty-state">
               <Compass size={35} />
               <h3>Todavía no hay resultados con esos filtros.</h3>
-              <p>Probá con otro deporte, barrio o categoría.</p>
+              <p>{filters.lat && filters.lng && expandedRadius
+                ? "Probá con un radio más amplio."
+                : "Probá con otro deporte, barrio o categoría."}</p>
               <button
                 className="button button-primary"
-                onClick={() => onSearch(defaultFilters)}
+                onClick={() => filters.lat && filters.lng && expandedRadius
+                  ? onSearch({ ...filters, radius: String(expandedRadius) })
+                  : document.querySelector(".explore-intro .search-panel input")?.focus()}
               >
-                Ver todas las opciones
+                {filters.lat && filters.lng && expandedRadius
+                  ? `Ampliar búsqueda a ${expandedRadius} km`
+                  : "Cambiar búsqueda"}
               </button>
             </div>
           )}
-          {layout === "list" ? (
+          {!active ? (
+            <IdleDirectory onLocate={locateNearby} locating={locating} geoError={geoError} />
+          ) : layout === "list" ? (
             <div className="directory-grid">
               {profiles.map((profile) => (
                 <ProfileCard
@@ -913,6 +1034,7 @@ function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
               profiles={profiles}
               filters={filters}
               onOpen={onOpen}
+              onRadiusChange={(radius) => onSearch({ ...filters, radius: String(radius) })}
             />
           )}
           <p className="directory-disclaimer">
@@ -2269,7 +2391,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [filters, setFilters] = useState(defaultFilters);
   const [profiles, setProfiles] = useState([]);
-  const [directoryLoading, setDirectoryLoading] = useState(true);
+  const [directoryLoading, setDirectoryLoading] = useState(false);
   const [directoryError, setDirectoryError] = useState("");
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [articles, setArticles] = useState([]);
@@ -2287,15 +2409,24 @@ export default function App() {
       });
   }, []);
   useEffect(() => {
+    if (!hasSearchCriteria(filters)) {
+      setProfiles([]);
+      setDirectoryLoading(false);
+      setDirectoryError("");
+      return;
+    }
     setDirectoryLoading(true);
     setDirectoryError("");
+    setProfiles([]);
+    let cancelled = false;
     const query = new URLSearchParams(
       Object.entries(filters).filter(([, value]) => value !== ""),
     ).toString();
     api(`/profiles${query ? `?${query}` : ""}`)
-      .then((data) => setProfiles(data.profiles))
-      .catch((issue) => setDirectoryError(issue.message))
-      .finally(() => setDirectoryLoading(false));
+      .then((data) => { if (!cancelled) setProfiles(data.profiles); })
+      .catch((issue) => { if (!cancelled) setDirectoryError(issue.message); })
+      .finally(() => { if (!cancelled) setDirectoryLoading(false); });
+    return () => { cancelled = true; };
   }, [filters]);
   useEffect(() => {
     if (!["home", "news", "article"].includes(view)) return;
@@ -2331,7 +2462,7 @@ export default function App() {
   };
   const search = (next) => {
     setFilters(next);
-    navigate("explore");
+    if (view !== "explore") navigate("explore");
   };
   const logout = async () => {
     await api("/auth/logout", { method: "POST" });
