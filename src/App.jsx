@@ -2681,7 +2681,10 @@ export default function App() {
   const authSuccess = (nextUser) => {
     setUser(nextUser);
     setAuthMode(null);
-    navigate(nextUser.role === "ADMIN" ? "admin" : "profile");
+    if (nextUser.role === "ADMIN" && window.location.pathname.startsWith("/admin/")) {
+      setView("admin");
+      window.scrollTo({ top: 0, behavior: "instant" });
+    } else navigate(nextUser.role === "ADMIN" ? "admin" : "profile");
   };
 
   return (
