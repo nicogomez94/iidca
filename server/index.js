@@ -11,6 +11,7 @@ import { PrismaClient } from "@prisma/client";
 import rateLimit from "express-rate-limit";
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
+import { buildImportTemplate, importError, parseImportFile, validateImportRow } from "./profileImport.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -59,6 +60,7 @@ app.use((req, res, next) => {
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Demasiados intentos. Probá más tarde." } });
 const claimLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 8, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Demasiadas solicitudes. Probá más tarde." } });
 const contactLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 5, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Demasiados mensajes. Probá más tarde." } });
+const importLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Demasiadas cargas. Probá en unos minutos." } });
 
 function activeProfile(user) {
   return user.claimedProfile || user.profile;
@@ -519,6 +521,93 @@ app.get("/api/admin/overview", auth, adminOnly, async (_req, res, next) => {
   }
 });
 
+async function prepareProfileImport(buffer, filename) {
+  const parsed = await parseImportFile(buffer, filename);
+  const rows = parsed.map(validateImportRow);
+  const seenIds = new Set();
+  const seenProfiles = new Set();
+  for (const row of rows) {
+    if (row.id && seenIds.has(row.id.toLowerCase())) row.errors.push("id_externo repetido en el archivo");
+    if (row.id) seenIds.add(row.id.toLowerCase());
+    const identity = [row.category, row.name, row.data.city, row.data.address].map((value) => String(value || "").toLocaleLowerCase("es")).join("|");
+    if (row.name && seenProfiles.has(identity)) row.errors.push("perfil repetido en el archivo");
+    if (row.name) seenProfiles.add(identity);
+  }
+  const keys = rows.filter((row) => row.id).map((row) => row.data.sourceKey);
+  const names = [...new Set(rows.filter((row) => row.name).map((row) => row.name))];
+  const [byKey, byName] = await Promise.all([
+    prisma.profile.findMany({ where: { sourceKey: { in: keys } }, select: { id: true, sourceKey: true, claimedById: true, verification: true } }),
+    names.length
+      ? prisma.profile.findMany({ where: { OR: names.map((name) => ({ name: { equals: name, mode: "insensitive" } })) }, select: { id: true, name: true, category: true, city: true, address: true, sourceKey: true } })
+      : [],
+  ]);
+  const keyMap = new Map(byKey.map((profile) => [profile.sourceKey, profile]));
+  for (const row of rows) {
+    const existing = keyMap.get(row.data.sourceKey);
+    const duplicate = row.data.address && byName.find((profile) => profile.id !== existing?.id
+      && profile.category === row.category
+      && profile.name.toLocaleLowerCase("es") === row.name?.toLocaleLowerCase("es")
+      && profile.city.toLocaleLowerCase("es") === row.data.city?.toLocaleLowerCase("es")
+      && (profile.address || "").toLocaleLowerCase("es") === (row.data.address || "").toLocaleLowerCase("es"));
+    row.action = row.errors.length ? "error" : existing?.claimedById || existing?.verification === "VERIFIED" || existing?.verification === "CLAIM_PENDING"
+      ? "skip" : duplicate ? "skip" : existing ? "update" : "create";
+    row.message = row.action === "skip"
+      ? existing ? "Ficha reclamada o en verificación: no se modifica." : "Ya existe una ficha con ese nombre, ciudad y dirección."
+      : row.errors.join("; ");
+  }
+  return {
+    rows,
+    summary: {
+      total: rows.length,
+      create: rows.filter((row) => row.action === "create").length,
+      update: rows.filter((row) => row.action === "update").length,
+      skip: rows.filter((row) => row.action === "skip").length,
+      error: rows.filter((row) => row.action === "error").length,
+    },
+  };
+}
+
+app.get("/api/admin/import/template/:format", auth, adminOnly, async (req, res, next) => {
+  try {
+    if (!["csv", "xlsx"].includes(req.params.format)) throw importError("Formato de plantilla inválido.");
+    const format = req.params.format;
+    const buffer = await buildImportTemplate(format);
+    res.setHeader("Cache-Control", "no-store");
+    res.type(format === "xlsx" ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "text/csv; charset=utf-8");
+    res.attachment(`iidca-plantilla-importador.${format}`);
+    res.send(buffer);
+  } catch (error) { next(error); }
+});
+
+const importBody = express.raw({ type: "application/octet-stream", limit: "5mb" });
+app.post("/api/admin/import/:step", auth, adminOnly, importLimiter, importBody, async (req, res, next) => {
+  try {
+    if (!["preview", "commit"].includes(req.params.step)) throw importError("Operación de importación inválida.");
+    const filename = cleanText(req.query.filename, 200);
+    const prepared = await prepareProfileImport(req.body, filename);
+    if (req.params.step === "preview") {
+      return res.json({
+        summary: prepared.summary,
+        rows: prepared.rows.map(({ line, id, name, category, action, message }) => ({ line, id, name, category, action, message })),
+      });
+    }
+    if (prepared.summary.error) throw importError("Corregí las filas con errores y volvé a revisar el archivo antes de importar.");
+    if (!prepared.summary.create && !prepared.summary.update) throw importError("No hay fichas nuevas o editables para importar.");
+    await prisma.$transaction(async (tx) => {
+      for (const row of prepared.rows) {
+        if (row.action === "create") await tx.profile.create({ data: row.data });
+        if (row.action === "update") await tx.profile.update({ where: { sourceKey: row.data.sourceKey }, data: { ...row.data, verification: undefined } });
+      }
+      await tx.auditEvent.create({ data: {
+        actorId: req.user.id,
+        action: "PROFILE_BULK_IMPORT",
+        detail: { filename, ...prepared.summary },
+      } });
+    }, { timeout: 60000 });
+    res.json({ summary: prepared.summary });
+  } catch (error) { next(error); }
+});
+
 function newsInput(input) {
   const article = {
     title: cleanText(input.title, 140),
@@ -735,6 +824,8 @@ app.get("/{*path}", (_req, res) =>
 );
 
 app.use((error, _req, res, _next) => {
+  if (error.status === 413)
+    return res.status(413).json({ error: "El archivo supera los 5 MB permitidos." });
   if (error.status === 400)
     return res.status(400).json({ error: error.message });
   if (error.code === "P2002")

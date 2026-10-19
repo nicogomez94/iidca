@@ -33,6 +33,10 @@ La vista mapa tiene búsqueda por nombre, deporte o barrio, filtros rápidos de 
 
 Para activar los marcadores múltiples: crear una clave para **Maps JavaScript API** en Google Cloud, habilitar facturación y restringir la clave por **sitios web** (`https://149.34.224.87/*` para esta instalación) y por API (Maps JavaScript API). Guardar `VITE_GOOGLE_MAPS_API_KEY=...` en `/var/www/sites/iidca-social-club/shared/app.env` de `hosting` y volver a ejecutar `bash scripts/deploy-hosting.sh`. Vite incorpora la clave pública al frontend durante la compilación: las restricciones de Google Cloud son necesarias. Si Google rechaza el origen, revisar el referrer indicado en la consola del navegador.
 
+## Importador de perfiles
+
+En `/admin/importador`, una cuenta administradora puede descargar una plantilla `.xlsx` (con guía de columnas) o `.csv`, subir hasta 500 fichas y revisar los resultados antes de confirmar. Se importan clubes (`CLUB`), profesionales (`PROFESSIONAL`), federaciones (`FEDERATION`) y marcas aliadas (`SPONSOR`). Las columnas obligatorias son `id_externo`, `nombre`, `tipo` y `ciudad`. `id_externo` debe mantenerse estable entre cargas: una carga posterior actualiza la misma ficha. `estado` acepta `PUBLISHED`, `PENDING` o `HIDDEN`; si se omite, se publica. Los deportes se separan con `|`, y las coordenadas `latitud`/`longitud` se completan juntas para mostrar el perfil en el mapa. La foto usa `foto_url` con HTTPS. El email de la planilla es un dato público de contacto y no crea una cuenta. Las fichas reclamadas o en verificación y los duplicados se omiten; cualquier fila inválida impide guardar todo el archivo.
+
 ## Producción y publicación
 
 La instancia está en [https://149.34.224.87/](https://149.34.224.87/). En `hosting` solo usa `/var/www/sites/iidca-social-club`, el usuario `site-iidca`, la base `iidca_social_club`, el servicio `iidca-social-club.service` y el upstream `127.0.0.1:3013`. Los secretos están en `/var/www/sites/iidca-social-club/shared/app.env`, fuera del código sincronizado. nginx sirve el frontend y envía `/api` al servidor Express. La IP tiene una renovación HTTPS independiente mediante `iidca-ip-cert-renew.timer`.

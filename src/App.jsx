@@ -17,8 +17,10 @@ import {
   Check,
   CircleHelp,
   Compass,
+  Download,
   Dumbbell,
   ExternalLink,
+  FileSpreadsheet,
   Heart,
   LocateFixed,
   LockKeyhole,
@@ -32,6 +34,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Users,
+  Upload,
   Volleyball,
   Waves,
   X,
@@ -2168,8 +2171,111 @@ function AdminNews() {
   </div>;
 }
 
+function AdminImport({ onImported }) {
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const downloadTemplate = async (format) => {
+    setError("");
+    try {
+      const response = await fetch(`/api/admin/import/template/${format}`, { credentials: "same-origin" });
+      if (!response.ok) throw new Error("No pudimos descargar la plantilla.");
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `iidca-plantilla-importador.${format}`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (issue) { setError(issue.message); }
+  };
+
+  const submit = async (step) => {
+    if (!file) return;
+    setBusy(step);
+    setError("");
+    setSuccess("");
+    try {
+      const response = await fetch(`/api/admin/import/${step}?filename=${encodeURIComponent(file.name)}`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: file,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "No pudimos procesar el archivo.");
+      if (step === "preview") setPreview(data);
+      else {
+        setSuccess(`Importación terminada: ${data.summary.create} fichas nuevas y ${data.summary.update} actualizadas.`);
+        setPreview(null);
+        setFile(null);
+        await onImported();
+      }
+    } catch (issue) { setError(issue.message); }
+    finally { setBusy(""); }
+  };
+
+  return (
+    <div className="admin-import-layout">
+      <section className="dashboard-card admin-import-intro">
+        <div className="admin-import-intro-icon"><FileSpreadsheet size={29} /></div>
+        <div>
+          <span className="admin-import-kicker">CARGA MASIVA</span>
+          <h2>Una planilla, muchos perfiles.</h2>
+          <p>Subí clubes, profesionales, federaciones o marcas aliadas en un solo archivo. Primero revisamos las filas; recién se guardan cuando confirmás.</p>
+        </div>
+      </section>
+
+      <div className="admin-import-grid">
+        <section className="dashboard-card admin-import-panel">
+          <span className="admin-import-step">1 · PREPARÁ EL ARCHIVO</span>
+          <h2>Descargá la plantilla</h2>
+          <p>Usá la primera fila como encabezado y completá un perfil por fila. La plantilla Excel incluye una segunda hoja con la explicación de cada columna.</p>
+          <div className="admin-import-downloads">
+            <button type="button" onClick={() => downloadTemplate("xlsx")}><Download size={17} /> Plantilla Excel</button>
+            <button type="button" onClick={() => downloadTemplate("csv")}><Download size={17} /> Plantilla CSV</button>
+          </div>
+          <div className="admin-import-rules">
+            <strong>Columnas obligatorias</strong>
+            <code>id_externo</code><code>nombre</code><code>tipo</code><code>ciudad</code>
+            <p><b>tipo:</b> CLUB, PROFESSIONAL, FEDERATION o SPONSOR. <b>estado:</b> PUBLISHED, PENDING o HIDDEN; si queda vacío, se publica.</p>
+            <p>Separá varios deportes con <b>|</b>. Completá <b>latitud y longitud</b> para que aparezca en el mapa. La <b>foto_url</b> debe ser una dirección HTTPS de la foto de esa ficha.</p>
+            <p><b>id_externo</b> identifica la ficha entre cargas: usá siempre el mismo valor para actualizarla. El email de la planilla es un contacto público; no crea una cuenta de acceso.</p>
+          </div>
+        </section>
+
+        <section className="dashboard-card admin-import-panel">
+          <span className="admin-import-step">2 · REVISÁ LOS DATOS</span>
+          <h2>Subí tu archivo</h2>
+          <p>Admitimos .xlsx y .csv de hasta 5 MB y 500 perfiles por carga.</p>
+          <label className="admin-import-drop">
+            <Upload size={30} />
+            <strong>{file ? file.name : "Elegí un archivo Excel o CSV"}</strong>
+            <span>{file ? `${(file.size / 1024).toFixed(1)} KB · listo para revisar` : "Hacé clic para buscarlo en tu equipo"}</span>
+            <input type="file" accept=".xlsx,.csv" onChange={(event) => { setFile(event.target.files?.[0] || null); setPreview(null); setError(""); setSuccess(""); }} />
+          </label>
+          <button className="button button-primary admin-import-primary" type="button" disabled={!file || Boolean(busy)} onClick={() => submit("preview")}>{busy === "preview" ? "Revisando..." : "Revisar archivo"} <ArrowRight size={17} /></button>
+          {error && <p className="admin-import-feedback error" role="alert">{error}</p>}
+          {success && <p className="admin-import-feedback success" role="status">{success}</p>}
+        </section>
+      </div>
+
+      {preview && <section className="dashboard-card admin-import-preview">
+        <div className="admin-import-preview-head">
+          <div><span className="admin-import-step">3 · CONFIRMÁ LA IMPORTACIÓN</span><h2>Resultado de la revisión</h2></div>
+          <div className="admin-import-totals"><span><b>{preview.summary.create}</b> nuevas</span><span><b>{preview.summary.update}</b> actualizaciones</span><span><b>{preview.summary.skip}</b> omitidas</span><span className={preview.summary.error ? "has-errors" : ""}><b>{preview.summary.error}</b> con errores</span></div>
+        </div>
+        <div className="admin-import-table-wrap"><table className="admin-import-table"><thead><tr><th>Fila</th><th>Identificador</th><th>Perfil</th><th>Tipo</th><th>Resultado</th></tr></thead><tbody>{preview.rows.map((row) => <tr key={row.line}><td>{row.line}</td><td>{row.id || "—"}</td><td>{row.name || "—"}</td><td>{row.category || "—"}</td><td><span className={`admin-import-status is-${row.action}`}>{({ create: "Nueva", update: "Actualizar", skip: "Omitir", error: "Error" })[row.action]}</span>{row.message && <small>{row.message}</small>}</td></tr>)}</tbody></table></div>
+        <div className="admin-import-confirm"><p>{preview.summary.error ? "Corregí los errores en la planilla y volvé a revisarla. No se guardó ninguna fila." : "Se guardarán solo las filas nuevas o actualizables. Las fichas reclamadas o duplicadas se omiten."}</p><button className="button button-primary" type="button" disabled={Boolean(busy) || preview.summary.error > 0 || preview.summary.create + preview.summary.update === 0} onClick={() => submit("commit")}>{busy === "commit" ? "Importando..." : "Confirmar importación"}</button></div>
+      </section>}
+    </div>
+  );
+}
+
 function Admin({ user, onAuth, onLogout, onNavigate }) {
-  const sectionFromPath = () => ({ "/admin/reclamos": "reclamos", "/admin/perfiles": "perfiles", "/admin/novedades": "novedades" })[window.location.pathname] || "resumen";
+  const sectionFromPath = () => ({ "/admin/reclamos": "reclamos", "/admin/perfiles": "perfiles", "/admin/importador": "importador", "/admin/novedades": "novedades" })[window.location.pathname] || "resumen";
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
@@ -2296,6 +2402,7 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
           <button className={activeSection === "resumen" ? "active" : ""} onClick={() => goToSection("resumen")}><Compass size={19} /> Resumen</button>
           <button className={activeSection === "reclamos" ? "active" : ""} onClick={() => goToSection("reclamos")}><BadgeCheck size={19} /> Reclamos <span>{claims.length}</span></button>
           <button className={activeSection === "perfiles" ? "active" : ""} onClick={() => goToSection("perfiles")}><Users size={19} /> Perfiles <span>{overview?.profiles.length ?? "—"}</span></button>
+          <button className={activeSection === "importador" ? "active" : ""} onClick={() => goToSection("importador")}><Upload size={19} /> Importador</button>
           <button className={activeSection === "novedades" ? "active" : ""} onClick={() => goToSection("novedades")}><Sparkles size={19} /> Novedades</button>
         </nav>
         <div className="admin-sidebar-bottom">
@@ -2307,7 +2414,7 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
       <div className="admin-main">
         <div className="admin-topbar"><button className="admin-menu-toggle" aria-label="Abrir menú de administración" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)}><Menu size={23} /></button><span>Administración <span>/</span> IIDCA Social Club</span><span className="admin-topbar-status"><i /> Panel activo</span></div>
         <div className="admin-content">
-          <div className="admin-heading"><div><span>PANEL DE GESTIÓN</span><h1>{({ resumen: "Resumen", reclamos: "Reclamos", perfiles: "Perfiles", novedades: "Novedades" })[activeSection]}</h1><p>{({ resumen: "Una mirada rápida a la comunidad.", reclamos: "Revisá las solicitudes de vinculación pendientes.", perfiles: "Administrá las fichas y descargá el padrón con filtros.", novedades: "Creá y publicá las historias que aparecen en el sitio." })[activeSection]}</p></div><span className="admin-heading-date">{new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long", year: "numeric" }).format(new Date())}</span></div>
+          <div className="admin-heading"><div><span>PANEL DE GESTIÓN</span><h1>{({ resumen: "Resumen", reclamos: "Reclamos", perfiles: "Perfiles", importador: "Importador", novedades: "Novedades" })[activeSection]}</h1><p>{({ resumen: "Una mirada rápida a la comunidad.", reclamos: "Revisá las solicitudes de vinculación pendientes.", perfiles: "Administrá las fichas y descargá el padrón con filtros.", importador: "Cargá y actualizá perfiles desde una planilla.", novedades: "Creá y publicá las historias que aparecen en el sitio." })[activeSection]}</p></div><span className="admin-heading-date">{new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long", year: "numeric" }).format(new Date())}</span></div>
         {error && (
           <div className="feedback error" role="alert">
             {error}
@@ -2418,6 +2525,7 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
           {overview && pageCount > 1 && <div className="admin-pagination"><span>Mostrando {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, visibleProfiles.length)} de {visibleProfiles.length} · página {currentPage} de {pageCount}</span><div><button disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Anterior</button><button disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>Siguiente</button></div></div>}
         </section>}
         {activeSection === "novedades" && <AdminNews />}
+        {activeSection === "importador" && <AdminImport onImported={load} />}
         {editing && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setEditing(null)}>
           <form className="admin-edit-modal" onSubmit={saveEdit} role="dialog" aria-modal="true" aria-label={`Editar ${editing.name}`}>
             <button type="button" className="modal-close" onClick={() => setEditing(null)} aria-label="Cerrar"><X /></button>
