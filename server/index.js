@@ -61,6 +61,9 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHea
 const claimLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 8, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Demasiadas solicitudes. Probá más tarde." } });
 const contactLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 5, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Demasiados mensajes. Probá más tarde." } });
 const importLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Demasiadas cargas. Probá en unos minutos." } });
+const accountProfileInclude = {
+  verificationRequests: { orderBy: { createdAt: "desc" }, take: 1 },
+};
 
 function activeProfile(user) {
   return user.claimedProfile || user.profile;
@@ -165,7 +168,9 @@ function normalizeProfile(input) {
 }
 
 function safeProfile(profile, includePrivate = false, includeSource = false) {
-  const { userId, claimedById, sourceContact, claims, user, claimedBy, ...publicData } = profile;
+  const { userId, claimedById, sourceContact, claims, verificationRequests, user, claimedBy, ...publicData } = profile;
+  if (includePrivate)
+    publicData.verificationRequestStatus = verificationRequests?.[0]?.status || null;
   if (includeSource) publicData.sourceContact = sourceContact;
   if (!includePrivate) {
     const allowedDetails = {
@@ -212,7 +217,10 @@ async function auth(req, res, next) {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     req.user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      include: { profile: true, claimedProfile: true },
+      include: {
+        profile: { include: accountProfileInclude },
+        claimedProfile: { include: accountProfileInclude },
+      },
     });
     if (!req.user) return res.status(401).json({ error: "Sesión inválida." });
     next();
@@ -324,7 +332,10 @@ app.post("/api/auth/register", authLimiter, async (req, res, next) => {
           },
         },
       },
-      include: { profile: true, claimedProfile: true },
+      include: {
+        profile: { include: accountProfileInclude },
+        claimedProfile: { include: accountProfileInclude },
+      },
     });
     sessionCookie(res, user);
     res.status(201).json({ user: accountData(user) });
@@ -337,7 +348,10 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
   const email = cleanText(req.body.email, 200).toLowerCase();
   const user = await prisma.user.findUnique({
     where: { email },
-    include: { profile: true, claimedProfile: true },
+    include: {
+      profile: { include: accountProfileInclude },
+      claimedProfile: { include: accountProfileInclude },
+    },
   });
   if (!user || (!demoMode && !(await bcrypt.compare(req.body.password || "", user.passwordHash)))) {
     return res.status(401).json({ error: "Email o contraseña incorrectos." });
@@ -370,9 +384,32 @@ app.patch("/api/me/profile", auth, async (req, res, next) => {
         ...data,
         status: req.user.role === "ATHLETE" ? "HIDDEN" : "PENDING",
       },
+      include: accountProfileInclude,
     });
     await audit(req.user.id, "PROFILE_EDIT", profile.id, { name: profile.name });
     res.json({ profile: safeProfile(profile, true) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/me/verification-request", claimLimiter, auth, async (req, res, next) => {
+  try {
+    const profile = activeProfile(req.user);
+    if (req.user.role !== "CLUB" || !profile || profile.category !== "CLUB")
+      return res.status(403).json({ error: "La verificación está disponible para perfiles de clubes." });
+    if (profile.verification === "VERIFIED")
+      return res.status(409).json({ error: "Este club ya está verificado." });
+    const pending = await prisma.clubVerificationRequest.findFirst({
+      where: { profileId: profile.id, status: "PENDING" },
+    });
+    if (pending)
+      return res.status(409).json({ error: "Ya hay una solicitud de verificación en revisión." });
+    const request = await prisma.clubVerificationRequest.create({
+      data: { profileId: profile.id },
+    });
+    await audit(req.user.id, "CLUB_VERIFICATION_SUBMITTED", profile.id, { requestId: request.id });
+    res.status(201).json({ request: { id: request.id, status: request.status } });
   } catch (error) {
     next(error);
   }
@@ -504,17 +541,29 @@ app.post("/api/profiles/:id/claim", claimLimiter, auth, async (req, res, next) =
 
 app.get("/api/admin/overview", auth, adminOnly, async (_req, res, next) => {
   try {
-    const [users, profiles, categories, claims] = await Promise.all([
+    const [users, profiles, categories, claims, verificationRequests] = await Promise.all([
       prisma.user.count(),
       prisma.profile.findMany({ orderBy: { createdAt: "desc" }, take: 1000, include: { user: { select: { email: true } }, claimedBy: { select: { email: true } } } }),
       prisma.profile.groupBy({ by: ["category"], _count: { id: true } }),
       prisma.claimRequest.findMany({ where: { status: "PENDING" }, orderBy: { createdAt: "asc" }, include: { user: { select: { email: true, profile: { select: { name: true } } } }, profile: { select: { name: true, sourceUrl: true } } } }),
+      prisma.clubVerificationRequest.findMany({
+        where: { status: "PENDING" },
+        orderBy: { createdAt: "asc" },
+        include: { profile: { include: { user: { select: { email: true } }, claimedBy: { select: { email: true } } } } },
+      }),
     ]);
     res.json({
       users,
       profiles: profiles.map((profile) => ({ ...safeProfile(profile, true, true), accountEmail: profile.user?.email || profile.claimedBy?.email || null })),
       categories,
       claims: claims.map((claim) => ({ id: claim.id, profileId: claim.profileId, profileName: claim.profile.name, applicant: claim.user.email, applicantName: claim.user.profile?.name, evidence: claim.evidence, createdAt: claim.createdAt })),
+      verificationRequests: verificationRequests.map((request) => ({
+        id: request.id,
+        profileId: request.profileId,
+        profileName: request.profile.name,
+        applicant: request.profile.user?.email || request.profile.claimedBy?.email || null,
+        createdAt: request.createdAt,
+      })),
     });
   } catch (error) {
     next(error);
@@ -697,6 +746,33 @@ app.patch("/api/admin/claims/:id", auth, adminOnly, async (req, res, next) => {
     await audit(req.user.id, `CLAIM_${decision}`, claim.profileId, { claimId: claim.id, applicant: claim.user.email });
     res.json({ ok: true });
   } catch (error) { next(error); }
+});
+
+app.patch("/api/admin/verification-requests/:id", auth, adminOnly, async (req, res, next) => {
+  try {
+    const decision = cleanText(req.body.decision, 10);
+    if (!["APPROVED", "REJECTED"].includes(decision)) throw validationError("Decisión inválida.");
+    const request = await prisma.clubVerificationRequest.findUnique({
+      where: { id: req.params.id },
+      include: { profile: true },
+    });
+    if (!request || request.status !== "PENDING")
+      return res.status(404).json({ error: "Solicitud de verificación pendiente no encontrada." });
+    await prisma.$transaction(async (tx) => {
+      await tx.clubVerificationRequest.update({
+        where: { id: request.id },
+        data: { status: decision, reviewedAt: new Date() },
+      });
+      await tx.profile.update({
+        where: { id: request.profileId },
+        data: { verification: decision === "APPROVED" ? "VERIFIED" : "UNVERIFIED" },
+      });
+    });
+    await audit(req.user.id, `CLUB_VERIFICATION_${decision}`, request.profileId, { requestId: request.id });
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get("/api/admin/export/:format", auth, adminOnly, async (req, res, next) => {

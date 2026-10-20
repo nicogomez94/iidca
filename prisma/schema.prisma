@@ -34,103 +34,125 @@ enum ClaimStatus {
   REJECTED
 }
 
+enum VerificationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  role         Role
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  profile      Profile?
-  claimedProfile Profile? @relation("ClaimedProfile")
-  claims       ClaimRequest[]
-  mfaSecret    String?
+  id               String         @id @default(cuid())
+  email            String         @unique
+  passwordHash     String
+  role             Role
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  profile          Profile?
+  claimedProfile   Profile?       @relation("ClaimedProfile")
+  claims           ClaimRequest[]
+  mfaSecret        String?
   mfaPendingSecret String?
-  mfaEnabled   Boolean @default(false)
-  auditEvents  AuditEvent[]
+  mfaEnabled       Boolean        @default(false)
+  auditEvents      AuditEvent[]
 }
 
 model Profile {
-  id           String        @id @default(cuid())
-  userId       String?       @unique
-  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  claimedById  String?       @unique
-  claimedBy    User?         @relation("ClaimedProfile", fields: [claimedById], references: [id], onDelete: SetNull)
-  name         String
-  category     Role
-  headline     String?
-  description  String?
-  sport        String?
-  sports       String[]
-  city         String
-  neighborhood String?
-  address      String?
-  latitude     Float?
-  longitude    Float?
-  email        String?
-  phone        String?
-  instagram    String?
-  website      String?
-  details      Json?
-  status       ProfileStatus @default(PENDING)
-  isDemo       Boolean       @default(false)
-  verification VerificationStatus @default(UNVERIFIED)
-  sourceKey    String?       @unique
-  sourceName   String?
-  sourceUrl    String?
-  sourceUpdatedAt DateTime?
-  sourceContact Json?
-  imageUrl     String?
-  imageCredit  String?
-  imageSourceUrl String?
-  imageIllustrative Boolean @default(false)
-  claims       ClaimRequest[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                   String                    @id @default(cuid())
+  userId               String?                   @unique
+  user                 User?                     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  claimedById          String?                   @unique
+  claimedBy            User?                     @relation("ClaimedProfile", fields: [claimedById], references: [id], onDelete: SetNull)
+  name                 String
+  category             Role
+  headline             String?
+  description          String?
+  sport                String?
+  sports               String[]
+  city                 String
+  neighborhood         String?
+  address              String?
+  latitude             Float?
+  longitude            Float?
+  email                String?
+  phone                String?
+  instagram            String?
+  website              String?
+  details              Json?
+  status               ProfileStatus             @default(PENDING)
+  isDemo               Boolean                   @default(false)
+  verification         VerificationStatus        @default(UNVERIFIED)
+  sourceKey            String?                   @unique
+  sourceName           String?
+  sourceUrl            String?
+  sourceUpdatedAt      DateTime?
+  sourceContact        Json?
+  imageUrl             String?
+  imageCredit          String?
+  imageSourceUrl       String?
+  imageIllustrative    Boolean                   @default(false)
+  claims               ClaimRequest[]
+  verificationRequests ClubVerificationRequest[]
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
 
   @@index([status, category])
   @@index([city])
   @@index([sport])
 }
 
-model ClaimRequest {
-  id        String @id @default(cuid())
-  profileId String
-  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  evidence  String
-  status    ClaimStatus @default(PENDING)
+model ClubVerificationRequest {
+  id         String                    @id @default(cuid())
+  profileId  String
+  profile    Profile                   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  status     VerificationRequestStatus @default(PENDING)
   reviewedAt DateTime?
-  createdAt DateTime @default(now())
+  createdAt  DateTime                  @default(now())
+  updatedAt  DateTime                  @updatedAt
+
   @@index([status, createdAt])
+  @@index([profileId, createdAt])
+}
+
+model ClaimRequest {
+  id         String      @id @default(cuid())
+  profileId  String
+  profile    Profile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  evidence   String
+  status     ClaimStatus @default(PENDING)
+  reviewedAt DateTime?
+  createdAt  DateTime    @default(now())
+
   @@unique([profileId, userId])
+  @@index([status, createdAt])
 }
 
 model AuditEvent {
-  id String @id @default(cuid())
-  actorId String?
-  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
-  action String
-  targetId String?
-  detail Json?
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action    String
+  targetId  String?
+  detail    Json?
   createdAt DateTime @default(now())
+
   @@index([createdAt])
 }
 
 model NewsArticle {
-  id          String   @id @default(cuid())
-  slug        String   @unique
+  id          String    @id @default(cuid())
+  slug        String    @unique
   title       String
   excerpt     String
   body        String
   category    String
   imageUrl    String
   imageAlt    String
-  published   Boolean  @default(false)
+  published   Boolean   @default(false)
   publishedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([published, publishedAt])
 }

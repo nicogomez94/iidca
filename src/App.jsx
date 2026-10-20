@@ -582,16 +582,80 @@ function Home({ onSearch, onNavigate, onAuth, articles }) {
 }
 
 function NewsPage({ articles, loading, error, onNavigate }) {
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("");
+  const [order, setOrder] = useState("recent");
+  const availableCategories = useMemo(
+    () => [...new Set(articles.map((article) => article.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es")),
+    [articles],
+  );
+  const visibleArticles = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase("es");
+    return [...articles]
+      .filter((article) => !category || article.category === category)
+      .filter((article) => !normalizedQuery || [article.title, article.excerpt, article.category].some((value) => value.toLocaleLowerCase("es").includes(normalizedQuery)))
+      .sort((a, b) => {
+        if (order === "title") return a.title.localeCompare(b.title, "es");
+        return new Date(b.publishedAt || b.createdAt) - new Date(a.publishedAt || a.createdAt);
+      });
+  }, [articles, category, order, query]);
+  const clearFilters = () => {
+    setQuery("");
+    setCategory("");
+    setOrder("recent");
+  };
   return <main className="news-page">
-    <section className="news-page-intro"><div className="container"><div className="eyebrow eyebrow-blue"><span className="eyebrow-dot" /> NOVEDADES IIDCA</div><h1>Historias para seguir <em>en movimiento.</em></h1><p>Ideas, experiencias y actividades para acercarte al deporte.</p></div></section>
-    <section className="news-page-list container" aria-label="Todas las novedades">
+    <section className="news-page-intro">
+      <div className="container news-page-intro-inner">
+        <div>
+          <div className="eyebrow eyebrow-blue"><span className="eyebrow-dot" /> NOVEDADES IIDCA</div>
+          <h1>Historias para seguir <em>en movimiento.</em></h1>
+          <p>Ideas, experiencias y actividades para acercarte al deporte.</p>
+        </div>
+        <div className="news-intro-mark" aria-hidden="true"><span>IIDCA</span><strong>NOVEDADES</strong></div>
+      </div>
+    </section>
+    <section className="container news-browser" aria-label="Todas las novedades">
+      <div className="news-filter-panel">
+        <label className="news-filter-search">
+          <span>Buscar en novedades</span>
+          <div><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Título, tema o palabra clave" /></div>
+        </label>
+        <label>
+          <span>Categoría</span>
+          <select value={category} onChange={(event) => setCategory(event.target.value)}>
+            <option value="">Todas las categorías</option>
+            {availableCategories.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Ordenar por</span>
+          <select value={order} onChange={(event) => setOrder(event.target.value)}>
+            <option value="recent">Más recientes</option>
+            <option value="title">Título A–Z</option>
+          </select>
+        </label>
+        {(query || category || order !== "recent") && <button className="news-clear-filters" type="button" onClick={clearFilters}><X size={16} /> Limpiar</button>}
+      </div>
+      <div className="news-results-heading">
+        <div><span>ARCHIVO DE HISTORIAS</span><h2>{visibleArticles.length} {visibleArticles.length === 1 ? "novedad" : "novedades"}</h2></div>
+        <p>Noticias, ideas y experiencias de la comunidad deportiva.</p>
+      </div>
       {loading && <p>Cargando novedades...</p>}
       {error && <p className="feedback error" role="alert">{error}</p>}
       {!loading && !error && !articles.length && <div className="empty-state"><h2>Pronto habrá novedades.</h2><p>Volvé a visitarnos para conocer nuevas historias.</p></div>}
-      {articles.map((article) => <article className="news-list-card" key={article.id}>
-        <button className="news-list-image" onClick={() => onNavigate("article", article.slug)} aria-label={`Leer ${article.title}`}><img src={article.imageUrl} alt={article.imageAlt} loading="lazy" /></button>
-        <div><span className="news-category">{article.category}</span><h2>{article.title}</h2><p>{article.excerpt}</p><button className="news-read-link" onClick={() => onNavigate("article", article.slug)}>Leer novedad <ArrowUpRight size={18} /></button></div>
-      </article>)}
+      {!loading && !error && articles.length > 0 && !visibleArticles.length && <div className="empty-state"><Search size={30} /><h2>No encontramos coincidencias.</h2><p>Probá con otra palabra o quitá los filtros.</p><button className="button button-outline" onClick={clearFilters}>Ver todas</button></div>}
+      <div className="news-page-grid">
+        {visibleArticles.map((article) => <article className="news-list-card" key={article.id}>
+          <button className="news-list-image" onClick={() => onNavigate("article", article.slug)} aria-label={`Leer ${article.title}`}><img src={article.imageUrl} alt={article.imageAlt} loading="lazy" /></button>
+          <div>
+            <div className="news-card-meta"><span className="news-category">{article.category}</span><time dateTime={article.publishedAt || article.createdAt}>{new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(article.publishedAt || article.createdAt))}</time></div>
+            <h2>{article.title}</h2>
+            <p>{article.excerpt}</p>
+            <button className="news-read-link" onClick={() => onNavigate("article", article.slug)}>Leer novedad <ArrowUpRight size={18} /></button>
+          </div>
+        </article>)}
+      </div>
     </section>
   </main>;
 }
@@ -1871,6 +1935,7 @@ function MemberProfile({ user, onUpdate, onExplore }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [verificationBusy, setVerificationBusy] = useState(false);
   if (!profile) return null;
   const update = async (event) => {
     event.preventDefault();
@@ -1913,6 +1978,20 @@ function MemberProfile({ user, onUpdate, onExplore }) {
       setError(issue.message);
     } finally {
       setLoading(false);
+    }
+  };
+  const requestVerification = async () => {
+    setVerificationBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      const data = await api("/me/verification-request", { method: "POST" });
+      onUpdate({ ...user, profile: { ...profile, verificationRequestStatus: data.request.status } });
+      setSuccess("Recibimos tu solicitud. Te avisaremos cuando la revisión avance.");
+    } catch (issue) {
+      setError(issue.message);
+    } finally {
+      setVerificationBusy(false);
     }
   };
   return (
@@ -1990,6 +2069,28 @@ function MemberProfile({ user, onUpdate, onExplore }) {
             </button>
           </section>
         </div>
+        {user.role === "CLUB" && (
+          <section className={`dashboard-card club-verification-card ${profile.verification === "VERIFIED" ? "is-verified" : ""}`}>
+            <div className="club-verification-icon">
+              {profile.verification === "VERIFIED" ? <BadgeCheck size={30} /> : <ShieldCheck size={30} />}
+            </div>
+            <div>
+              <span className="club-verification-kicker">IDENTIDAD DEL CLUB</span>
+              <h2>{profile.verification === "VERIFIED" ? "Club verificado" : profile.verificationRequestStatus === "PENDING" ? "Verificación en revisión" : "Verificá tu club"}</h2>
+              <p>{profile.verification === "VERIFIED"
+                ? "La insignia de verificación ya aparece junto al nombre de tu club en el directorio."
+                : profile.verificationRequestStatus === "PENDING"
+                  ? "El equipo de IIDCA recibió la solicitud. Los requisitos y la documentación se incorporarán en la próxima etapa del proceso."
+                  : "Solicitá la revisión para que, una vez aprobada, tu perfil muestre la insignia de club verificado. Pronto vamos a sumar los requisitos específicos."}</p>
+            </div>
+            {profile.verification !== "VERIFIED" && profile.verificationRequestStatus !== "PENDING" && (
+              <button className="button button-orange" type="button" disabled={verificationBusy} onClick={requestVerification}>
+                {verificationBusy ? "Enviando..." : "Verificá tu club"} <ArrowUpRight size={18} />
+              </button>
+            )}
+            {profile.verificationRequestStatus === "PENDING" && <span className="verification-review-badge"><CircleHelp size={16} /> En revisión</span>}
+          </section>
+        )}
         {success && (
           <div className="feedback success" role="status">
             {success}
@@ -2310,6 +2411,15 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
     } catch (issue) { setError(issue.message); }
     finally { setBusy(""); }
   };
+  const decideVerification = async (id, decision) => {
+    setBusy(id);
+    setError("");
+    try {
+      await api(`/admin/verification-requests/${id}`, { method: "PATCH", body: JSON.stringify({ decision }) });
+      await load();
+    } catch (issue) { setError(issue.message); }
+    finally { setBusy(""); }
+  };
   const saveEdit = async (event) => {
     event.preventDefault();
     setBusy(editing.id);
@@ -2384,6 +2494,8 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
   const currentPage = Math.min(page, pageCount);
   const pagedProfiles = visibleProfiles.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const claims = overview?.claims || [];
+  const verificationRequests = overview?.verificationRequests || [];
+  const pendingReviews = claims.length + verificationRequests.length;
   const claimPageCount = Math.max(1, Math.ceil(claims.length / 5));
   const currentClaimPage = Math.min(claimPage, claimPageCount);
   const goToSection = (section) => {
@@ -2400,7 +2512,7 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
         <div className="admin-sidebar-label">ESPACIO DE TRABAJO</div>
         <nav className="admin-sidebar-nav" aria-label="Menú de administración">
           <button className={activeSection === "resumen" ? "active" : ""} onClick={() => goToSection("resumen")}><Compass size={19} /> Resumen</button>
-          <button className={activeSection === "reclamos" ? "active" : ""} onClick={() => goToSection("reclamos")}><BadgeCheck size={19} /> Reclamos <span>{claims.length}</span></button>
+          <button className={activeSection === "reclamos" ? "active" : ""} onClick={() => goToSection("reclamos")}><BadgeCheck size={19} /> Verificaciones <span>{pendingReviews}</span></button>
           <button className={activeSection === "perfiles" ? "active" : ""} onClick={() => goToSection("perfiles")}><Users size={19} /> Perfiles <span>{overview?.profiles.length ?? "—"}</span></button>
           <button className={activeSection === "importador" ? "active" : ""} onClick={() => goToSection("importador")}><Upload size={19} /> Importador</button>
           <button className={activeSection === "novedades" ? "active" : ""} onClick={() => goToSection("novedades")}><Sparkles size={19} /> Novedades</button>
@@ -2414,7 +2526,7 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
       <div className="admin-main">
         <div className="admin-topbar"><button className="admin-menu-toggle" aria-label="Abrir menú de administración" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)}><Menu size={23} /></button><span>Administración <span>/</span> IIDCA Social Club</span><span className="admin-topbar-status"><i /> Panel activo</span></div>
         <div className="admin-content">
-          <div className="admin-heading"><div><span>PANEL DE GESTIÓN</span><h1>{({ resumen: "Resumen", reclamos: "Reclamos", perfiles: "Perfiles", importador: "Importador", novedades: "Novedades" })[activeSection]}</h1><p>{({ resumen: "Una mirada rápida a la comunidad.", reclamos: "Revisá las solicitudes de vinculación pendientes.", perfiles: "Administrá las fichas y descargá el padrón con filtros.", importador: "Cargá y actualizá perfiles desde una planilla.", novedades: "Creá y publicá las historias que aparecen en el sitio." })[activeSection]}</p></div><span className="admin-heading-date">{new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long", year: "numeric" }).format(new Date())}</span></div>
+          <div className="admin-heading"><div><span>PANEL DE GESTIÓN</span><h1>{({ resumen: "Resumen", reclamos: "Verificaciones", perfiles: "Perfiles", importador: "Importador", novedades: "Novedades" })[activeSection]}</h1><p>{({ resumen: "Una mirada rápida a la comunidad.", reclamos: "Revisá solicitudes de verificación y vinculación de clubes.", perfiles: "Administrá las fichas y descargá el padrón con filtros.", importador: "Cargá y actualizá perfiles desde una planilla.", novedades: "Creá y publicá las historias que aparecen en el sitio." })[activeSection]}</p></div><span className="admin-heading-date">{new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long", year: "numeric" }).format(new Date())}</span></div>
         {error && (
           <div className="feedback error" role="alert">
             {error}
@@ -2437,7 +2549,7 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
             <ShieldCheck size={25} />
           </div>
         </div>
-        <div className="admin-overview-links"><button onClick={() => goToSection("reclamos")}><BadgeCheck size={24} /><strong>Reclamos</strong><span>{claims.length} por revisar</span><ArrowRight size={18} /></button><button onClick={() => goToSection("perfiles")}><Users size={24} /><strong>Perfiles</strong><span>{overview?.profiles.length ?? "—"} fichas registradas</span><ArrowRight size={18} /></button></div></>}
+        <div className="admin-overview-links"><button onClick={() => goToSection("reclamos")}><BadgeCheck size={24} /><strong>Verificaciones</strong><span>{pendingReviews} solicitudes por revisar</span><ArrowRight size={18} /></button><button onClick={() => goToSection("perfiles")}><Users size={24} /><strong>Perfiles</strong><span>{overview?.profiles.length ?? "—"} fichas registradas</span><ArrowRight size={18} /></button></div></>}
         {activeSection === "perfiles" && <section className="dashboard-card admin-export-panel">
           <div className="admin-export-head">
             <h2>Descargar padrón</h2>
@@ -2455,16 +2567,27 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
             <button className="button button-outline" disabled={!visibleProfiles.length} onClick={() => downloadExport("pdf")}>Descargar PDF</button>
           </div></div>
         </section>}
-        {activeSection === "reclamos" && <section className="dashboard-card admin-claims">
-          <div className="admin-list-heading"><h2>Reclamos por verificar</h2><span>{overview?.claims?.length || 0} pendientes</span></div>
-          {claims.length ? claims.slice((currentClaimPage - 1) * 5, currentClaimPage * 5).map((claim) => (
-            <article className="admin-claim" key={claim.id}>
-              <div><strong>{claim.profileName}</strong><p>Solicita: {claim.applicantName || claim.applicant} · {claim.applicant}</p><blockquote>{claim.evidence}</blockquote></div>
-              <div className="admin-row-actions"><button disabled={busy === claim.id} onClick={() => decideClaim(claim.id, "APPROVED")}>Aprobar vínculo</button><button disabled={busy === claim.id} onClick={() => decideClaim(claim.id, "REJECTED")}>Rechazar</button></div>
-            </article>
-          )) : <p>No hay reclamos pendientes.</p>}
-          {claimPageCount > 1 && <div className="admin-pagination"><span>Página {currentClaimPage} de {claimPageCount}</span><div><button disabled={currentClaimPage === 1} onClick={() => setClaimPage(currentClaimPage - 1)}>Anterior</button><button disabled={currentClaimPage === claimPageCount} onClick={() => setClaimPage(currentClaimPage + 1)}>Siguiente</button></div></div>}
-        </section>}
+        {activeSection === "reclamos" && <div className="admin-verification-layout">
+          <section className="dashboard-card admin-claims">
+            <div className="admin-list-heading"><div><span className="admin-section-kicker">INSIGNIA DE CONFIANZA</span><h2>Clubes que piden verificación</h2></div><span>{verificationRequests.length} pendientes</span></div>
+            {verificationRequests.length ? verificationRequests.map((request) => (
+              <article className="admin-claim" key={request.id}>
+                <div><strong>{request.profileName}</strong><p>Cuenta responsable: {request.applicant || "Sin cuenta informada"}</p><blockquote>Solicitud inicial. Los requisitos documentales se definirán en la próxima etapa.</blockquote></div>
+                <div className="admin-row-actions"><button disabled={busy === request.id} onClick={() => decideVerification(request.id, "APPROVED")}>Otorgar insignia</button><button disabled={busy === request.id} onClick={() => decideVerification(request.id, "REJECTED")}>Rechazar</button></div>
+              </article>
+            )) : <p className="admin-empty">No hay solicitudes de verificación pendientes.</p>}
+          </section>
+          <section className="dashboard-card admin-claims">
+            <div className="admin-list-heading"><div><span className="admin-section-kicker">FICHAS DEL PADRÓN</span><h2>Reclamos de vinculación</h2></div><span>{claims.length} pendientes</span></div>
+            {claims.length ? claims.slice((currentClaimPage - 1) * 5, currentClaimPage * 5).map((claim) => (
+              <article className="admin-claim" key={claim.id}>
+                <div><strong>{claim.profileName}</strong><p>Solicita: {claim.applicantName || claim.applicant} · {claim.applicant}</p><blockquote>{claim.evidence}</blockquote></div>
+                <div className="admin-row-actions"><button disabled={busy === claim.id} onClick={() => decideClaim(claim.id, "APPROVED")}>Aprobar vínculo</button><button disabled={busy === claim.id} onClick={() => decideClaim(claim.id, "REJECTED")}>Rechazar</button></div>
+              </article>
+            )) : <p className="admin-empty">No hay reclamos de vinculación pendientes.</p>}
+            {claimPageCount > 1 && <div className="admin-pagination"><span>Página {currentClaimPage} de {claimPageCount}</span><div><button disabled={currentClaimPage === 1} onClick={() => setClaimPage(currentClaimPage - 1)}>Anterior</button><button disabled={currentClaimPage === claimPageCount} onClick={() => setClaimPage(currentClaimPage + 1)}>Siguiente</button></div></div>}
+          </section>
+        </div>}
         {activeSection === "perfiles" && <section className="dashboard-card admin-list">
           <div className="admin-list-heading">
             <h2>Perfiles de la plataforma</h2>
