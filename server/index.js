@@ -1,12 +1,14 @@
 import "dotenv/config";
 import path from "node:path";
 import crypto from "node:crypto";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
 import express from "express";
 import helmet from "helmet";
 import jwt from "jsonwebtoken";
+import multer from "multer";
 import { PrismaClient } from "@prisma/client";
 import rateLimit from "express-rate-limit";
 import ExcelJS from "exceljs";
@@ -16,6 +18,9 @@ import { buildImportTemplate, importError, parseImportFile, validateImportRow } 
 const app = express();
 app.set("trust proxy", 1);
 const prisma = new PrismaClient();
+const dirname = path.dirname(fileURLToPath(import.meta.url));
+const uploadDir = process.env.UPLOAD_DIR || path.resolve(dirname, "../uploads");
+fs.mkdirSync(uploadDir, { recursive: true });
 const port = Number(process.env.PORT || 4000);
 const host = process.env.HOST || '127.0.0.1';
 const tokenName = "iidca_session";
@@ -48,6 +53,7 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: "64kb" }));
 app.use(cookieParser());
+app.use("/uploads", express.static(uploadDir, { immutable: true, maxAge: "1y", fallthrough: false }));
 app.use((req, res, next) => {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
   const origin = req.get("Origin");
@@ -63,6 +69,10 @@ const contactLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 5, standardH
 const importLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Demasiadas cargas. Probá en unos minutos." } });
 const accountProfileInclude = {
   verificationRequests: { orderBy: { createdAt: "desc" }, take: 1 },
+  facilities: {
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    include: { photos: { orderBy: { createdAt: "asc" } } },
+  },
 };
 
 function activeProfile(user) {
@@ -84,6 +94,52 @@ function validationError(message) {
   const error = new Error(message);
   error.status = 400;
   return error;
+}
+
+const facilityPhotoUpload = multer({
+  storage: multer.diskStorage({
+    destination: uploadDir,
+    filename: (_req, file, callback) => {
+      const extensions = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp" };
+      callback(null, `${Date.now()}-${crypto.randomBytes(12).toString("hex")}${extensions[file.mimetype] || ""}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, callback) => {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.mimetype))
+      return callback(validationError("La foto debe ser JPG, PNG o WebP."));
+    callback(null, true);
+  },
+});
+
+function normalizeFacilities(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((item) => cleanText(typeof item === "string" ? item : item?.name, 120)).filter(Boolean))].slice(0, 12);
+}
+
+async function syncClubVerification(profileId, client = prisma) {
+  const facilities = await client.clubFacility.findMany({
+    where: { profileId },
+    select: { _count: { select: { photos: true } } },
+  });
+  const photographed = facilities.filter((facility) => facility._count.photos > 0).length;
+  const verification = facilities.length > 0 && photographed === facilities.length ? "VERIFIED" : "UNVERIFIED";
+  await client.profile.update({ where: { id: profileId }, data: { verification } });
+  return { verification, total: facilities.length, photographed };
+}
+
+function ownedClubProfile(req) {
+  const profile = activeProfile(req.user);
+  if (req.user.role !== "CLUB" || !profile || profile.category !== "CLUB") return null;
+  return profile;
+}
+
+async function accountProfile(profileId) {
+  const profile = await prisma.profile.findUnique({
+    where: { id: profileId },
+    include: accountProfileInclude,
+  });
+  return safeProfile(profile, true);
 }
 
 function normalizeProfile(input) {
@@ -306,8 +362,11 @@ app.post("/api/auth/register", authLimiter, async (req, res, next) => {
           error: "Autorizá la publicación de los datos de contacto del perfil.",
         });
     const profile = normalizeProfile(req.body.profile || {});
+    const facilities = normalizeFacilities(req.body.profile?.facilities);
     if (!profile.name || !profile.city)
       return res.status(400).json({ error: "Completá el nombre y la ciudad." });
+    if (role === "CLUB" && facilities.length === 0)
+      return res.status(400).json({ error: "Declaración de instalaciones: agregá al menos una instalación del club." });
     if (role === "ATHLETE" && Number(profile.details?.age) < 18)
       return res
         .status(400)
@@ -329,6 +388,9 @@ app.post("/api/auth/register", authLimiter, async (req, res, next) => {
             category: role,
             sports: profile.sports || (profile.sport ? [profile.sport] : []),
             status: role === "ATHLETE" ? "HIDDEN" : "PENDING",
+            facilities: role === "CLUB"
+              ? { create: facilities.map((name, sortOrder) => ({ name, sortOrder })) }
+              : undefined,
           },
         },
       },
@@ -395,21 +457,130 @@ app.patch("/api/me/profile", auth, async (req, res, next) => {
 
 app.post("/api/me/verification-request", claimLimiter, auth, async (req, res, next) => {
   try {
-    const profile = activeProfile(req.user);
-    if (req.user.role !== "CLUB" || !profile || profile.category !== "CLUB")
+    const profile = ownedClubProfile(req);
+    if (!profile)
       return res.status(403).json({ error: "La verificación está disponible para perfiles de clubes." });
-    if (profile.verification === "VERIFIED")
-      return res.status(409).json({ error: "Este club ya está verificado." });
-    const pending = await prisma.clubVerificationRequest.findFirst({
-      where: { profileId: profile.id, status: "PENDING" },
+    const progress = await syncClubVerification(profile.id);
+    if (progress.verification !== "VERIFIED")
+      return res.status(400).json({
+        error: `Subí al menos una foto por instalación. Completaste ${progress.photographed} de ${progress.total}.`,
+      });
+    res.json({ profile: await accountProfile(profile.id), progress });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/me/facilities", auth, async (req, res, next) => {
+  try {
+    const profile = ownedClubProfile(req);
+    if (!profile)
+      return res.status(403).json({ error: "Esta acción está disponible para perfiles de clubes." });
+    const name = cleanText(req.body.name, 120);
+    if (!name) throw validationError("Escribí el nombre de la instalación.");
+    const count = await prisma.clubFacility.count({ where: { profileId: profile.id } });
+    if (count >= 12) throw validationError("Podés declarar hasta 12 instalaciones.");
+    await prisma.$transaction(async (tx) => {
+      await tx.clubFacility.create({ data: { profileId: profile.id, name, sortOrder: count } });
+      await syncClubVerification(profile.id, tx);
     });
-    if (pending)
-      return res.status(409).json({ error: "Ya hay una solicitud de verificación en revisión." });
-    const request = await prisma.clubVerificationRequest.create({
-      data: { profileId: profile.id },
+    await audit(req.user.id, "CLUB_FACILITY_CREATED", profile.id, { name });
+    res.status(201).json({ profile: await accountProfile(profile.id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/me/facilities/:id", auth, async (req, res, next) => {
+  try {
+    const profile = ownedClubProfile(req);
+    if (!profile)
+      return res.status(403).json({ error: "Esta acción está disponible para perfiles de clubes." });
+    const facility = await prisma.clubFacility.findFirst({ where: { id: req.params.id, profileId: profile.id } });
+    if (!facility) return res.status(404).json({ error: "Instalación no encontrada." });
+    const name = cleanText(req.body.name, 120);
+    if (!name) throw validationError("Escribí el nombre de la instalación.");
+    await prisma.clubFacility.update({ where: { id: facility.id }, data: { name } });
+    await audit(req.user.id, "CLUB_FACILITY_RENAMED", profile.id, { facilityId: facility.id, name });
+    res.json({ profile: await accountProfile(profile.id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/me/facilities/:id", auth, async (req, res, next) => {
+  try {
+    const profile = ownedClubProfile(req);
+    if (!profile)
+      return res.status(403).json({ error: "Esta acción está disponible para perfiles de clubes." });
+    const facilities = await prisma.clubFacility.findMany({
+      where: { profileId: profile.id },
+      include: { photos: true },
     });
-    await audit(req.user.id, "CLUB_VERIFICATION_SUBMITTED", profile.id, { requestId: request.id });
-    res.status(201).json({ request: { id: request.id, status: request.status } });
+    const facility = facilities.find((item) => item.id === req.params.id);
+    if (!facility) return res.status(404).json({ error: "Instalación no encontrada." });
+    if (facilities.length <= 1) throw validationError("El club debe conservar al menos una instalación declarada.");
+    await prisma.$transaction(async (tx) => {
+      await tx.clubFacility.delete({ where: { id: facility.id } });
+      await syncClubVerification(profile.id, tx);
+    });
+    await Promise.all(facility.photos.map((photo) => fs.promises.unlink(path.join(uploadDir, path.basename(photo.url))).catch(() => {})));
+    await audit(req.user.id, "CLUB_FACILITY_DELETED", profile.id, { facilityId: facility.id, name: facility.name });
+    res.json({ profile: await accountProfile(profile.id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/me/facilities/:id/photos", claimLimiter, auth, facilityPhotoUpload.single("photo"), async (req, res, next) => {
+  try {
+    const profile = ownedClubProfile(req);
+    const facility = profile
+      ? await prisma.clubFacility.findFirst({ where: { id: req.params.id, profileId: profile.id }, include: { _count: { select: { photos: true } } } })
+      : null;
+    if (!facility) {
+      if (req.file) await fs.promises.unlink(req.file.path).catch(() => {});
+      return res.status(404).json({ error: "Instalación no encontrada." });
+    }
+    if (!req.file) throw validationError("Elegí una foto para subir.");
+    if (facility._count.photos >= 6) {
+      await fs.promises.unlink(req.file.path).catch(() => {});
+      throw validationError("Podés subir hasta 6 fotos por instalación.");
+    }
+    const url = `/uploads/${req.file.filename}`;
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.facilityPhoto.create({ data: { facilityId: facility.id, url } });
+        await syncClubVerification(profile.id, tx);
+      });
+    } catch (error) {
+      await fs.promises.unlink(req.file.path).catch(() => {});
+      throw error;
+    }
+    await audit(req.user.id, "CLUB_FACILITY_PHOTO_ADDED", profile.id, { facilityId: facility.id });
+    res.status(201).json({ profile: await accountProfile(profile.id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/me/facility-photos/:id", auth, async (req, res, next) => {
+  try {
+    const profile = ownedClubProfile(req);
+    const photo = profile
+      ? await prisma.facilityPhoto.findFirst({
+          where: { id: req.params.id, facility: { profileId: profile.id } },
+          include: { facility: true },
+        })
+      : null;
+    if (!photo) return res.status(404).json({ error: "Foto no encontrada." });
+    await prisma.$transaction(async (tx) => {
+      await tx.facilityPhoto.delete({ where: { id: photo.id } });
+      await syncClubVerification(profile.id, tx);
+    });
+    await fs.promises.unlink(path.join(uploadDir, path.basename(photo.url))).catch(() => {});
+    await audit(req.user.id, "CLUB_FACILITY_PHOTO_DELETED", profile.id, { facilityId: photo.facilityId });
+    res.json({ profile: await accountProfile(profile.id) });
   } catch (error) {
     next(error);
   }
@@ -497,6 +668,12 @@ app.get("/api/profiles/:id", async (req, res, next) => {
   try {
     const profile = await prisma.profile.findUnique({
       where: { id: req.params.id },
+      include: {
+        facilities: {
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          include: { photos: { orderBy: { createdAt: "asc" } } },
+        },
+      },
     });
     if (
       !profile ||
@@ -738,7 +915,7 @@ app.patch("/api/admin/claims/:id", auth, adminOnly, async (req, res, next) => {
     await prisma.$transaction(async (tx) => {
       await tx.claimRequest.update({ where: { id: claim.id }, data: { status: decision, reviewedAt: new Date() } });
       await tx.profile.update({ where: { id: claim.profileId }, data: decision === "APPROVED"
-        ? { verification: "VERIFIED", claimedById: claim.userId, status: "PUBLISHED" }
+        ? { verification: "UNVERIFIED", claimedById: claim.userId, status: "PUBLISHED" }
         : { verification: "UNVERIFIED" } });
       if (decision === "APPROVED" && claim.user.profile)
         await tx.profile.update({ where: { id: claim.user.profile.id }, data: { status: "HIDDEN" } });
@@ -763,10 +940,13 @@ app.patch("/api/admin/verification-requests/:id", auth, adminOnly, async (req, r
         where: { id: request.id },
         data: { status: decision, reviewedAt: new Date() },
       });
-      await tx.profile.update({
-        where: { id: request.profileId },
-        data: { verification: decision === "APPROVED" ? "VERIFIED" : "UNVERIFIED" },
-      });
+      if (decision === "APPROVED") {
+        const progress = await syncClubVerification(request.profileId, tx);
+        if (progress.verification !== "VERIFIED")
+          throw validationError("El club necesita una foto por cada instalación declarada antes de recibir la insignia.");
+      } else {
+        await tx.profile.update({ where: { id: request.profileId }, data: { verification: "UNVERIFIED" } });
+      }
     });
     await audit(req.user.id, `CLUB_VERIFICATION_${decision}`, request.profileId, { requestId: request.id });
     res.json({ ok: true });
@@ -889,7 +1069,6 @@ app.patch("/api/admin/profile-data/:id", auth, adminOnly, async (req, res, next)
   } catch (error) { next(error); }
 });
 
-const dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.resolve(dirname, "../dist");
 app.use("/api", (_req, res) =>
   res.status(404).json({ error: "Ruta no encontrada." }),
@@ -900,10 +1079,16 @@ app.get("/{*path}", (_req, res) =>
 );
 
 app.use((error, _req, res, _next) => {
+  if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE")
+    return res.status(413).json({ error: "La foto supera los 5 MB permitidos." });
+  if (error instanceof multer.MulterError)
+    return res.status(400).json({ error: "No pudimos procesar la foto." });
   if (error.status === 413)
     return res.status(413).json({ error: "El archivo supera los 5 MB permitidos." });
   if (error.status === 400)
     return res.status(400).json({ error: error.message });
+  if (error.status === 404)
+    return res.status(404).json({ error: "Archivo no encontrado." });
   if (error.code === "P2002")
     return res
       .status(409)

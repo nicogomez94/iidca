@@ -14,6 +14,8 @@ import {
   ArrowRight,
   ArrowUpRight,
   BadgeCheck,
+  Building2,
+  Camera,
   Check,
   CircleHelp,
   Compass,
@@ -29,10 +31,12 @@ import {
   MapPin,
   Menu,
   Navigation,
+  Plus,
   Search,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
+  Trash2,
   Users,
   Upload,
   Volleyball,
@@ -111,7 +115,7 @@ function Header({ view, onNavigate, onAuth, user, onLogout }) {
           aria-label="Navegación principal"
         >
           <button
-            className={view === "explore" ? "active" : ""}
+            className={view === "explore" || view === "club" ? "active" : ""}
             onClick={() => go("explore")}
           >
             Explorar
@@ -743,7 +747,7 @@ function ProfileCard({ profile, onOpen }) {
         <div className="card-icon">{roleIcon(profile.category, 25)}</div>
         <span className="card-category">{categoryLabel(profile.category)}</span>
         <span className={`verification-chip ${profile.verification === "VERIFIED" ? "is-verified" : ""}`}>
-          {profile.verification === "VERIFIED" ? <><BadgeCheck size={15} /> Verificado</> : "Datos públicos"}
+          {profile.verification === "VERIFIED" ? <><BadgeCheck size={15} /> Verificado</> : profile.category === "CLUB" ? "Sin verificar" : "Datos públicos"}
         </span>
       </div>
       <div className="card-body">
@@ -1215,7 +1219,7 @@ function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
   );
 }
 
-function DetailModal({ profile, onClose, user, onAuth }) {
+function DetailModal({ profile, onClose, user, onAuth, onNavigate }) {
   const [claimOpen, setClaimOpen] = useState(false);
   const [evidence, setEvidence] = useState(testingMode ? "Solicitud de prueba: represento a este club y quiero verificar cómo funciona la revisión de fichas en IIDCA." : "");
   const [claimMessage, setClaimMessage] = useState("");
@@ -1280,7 +1284,7 @@ function DetailModal({ profile, onClose, user, onAuth }) {
         <div className="detail-content">
           <h2>{profile.name}</h2>
           <div className="detail-verification">
-            {profile.verification === "VERIFIED" ? <><BadgeCheck size={18} /> Ficha verificada por IIDCA</> : <><CircleHelp size={18} /> Información pública sin reclamar</>}
+            {profile.verification === "VERIFIED" ? <><BadgeCheck size={18} /> Club verificado · instalaciones con fotos</> : profile.category === "CLUB" ? <><CircleHelp size={18} /> Instalaciones pendientes de completar</> : <><CircleHelp size={18} /> Información pública sin verificar</>}
           </div>
           {profile.imageSourceUrl && <p className="image-credit"><a href={profile.imageSourceUrl} target="_blank" rel="noopener noreferrer">{profile.imageCredit || "Wikimedia Commons"}</a></p>}
           <p className="detail-headline">{profile.headline}</p>
@@ -1357,6 +1361,11 @@ function DetailModal({ profile, onClose, user, onAuth }) {
             </div>
           )}
           <div className="detail-actions">
+            {profile.category === "CLUB" && (
+              <button className="button button-orange" onClick={() => { onClose(); onNavigate("club", profile.id); }}>
+                Ver perfil completo <ArrowUpRight size={18} />
+              </button>
+            )}
             {profile.email && !profile.isDemo && (
               <a
                 className="button button-primary"
@@ -1416,6 +1425,89 @@ function DetailModal({ profile, onClose, user, onAuth }) {
   );
 }
 
+function ClubProfilePage({ profile, loading, error, onNavigate }) {
+  if (loading) return <main className="club-profile-page"><div className="container empty-state"><p>Cargando perfil del club...</p></div></main>;
+  if (error || !profile || profile.category !== "CLUB") return <main className="club-profile-page"><div className="container empty-state"><Building2 size={34} /><h1>No encontramos este club.</h1><p>{error || "La ficha no está disponible."}</p><button className="button button-primary" onClick={() => onNavigate("explore")}>Volver al directorio</button></div></main>;
+  const phone = profile.phone?.replace(/[^\d+]/g, "");
+  const facilities = profile.facilities || [];
+  const details = [
+    ["Niveles", profile.details?.levels],
+    ["Días y horarios", profile.details?.schedule],
+    ["Edades admitidas", profile.details?.ages],
+  ].filter(([, value]) => value);
+  return (
+    <main className="club-profile-page">
+      <section className="club-profile-hero">
+        <img src={profile.imageUrl || facilities[0]?.photos?.[0]?.url || "/images/sports/football.jpg"} alt={`Actividad e instalaciones de ${profile.name}`} />
+        <div className="club-profile-overlay" />
+        <div className="container club-profile-hero-content">
+          <button className="club-profile-back" onClick={() => onNavigate("explore")}><ArrowLeft size={18} /> Volver al directorio</button>
+          <div className={`club-profile-badge ${profile.verification === "VERIFIED" ? "is-verified" : ""}`}>
+            {profile.verification === "VERIFIED" ? <BadgeCheck size={17} /> : <CircleHelp size={17} />}
+            {profile.verification === "VERIFIED" ? "Club verificado" : "Instalaciones aún sin verificar"}
+          </div>
+          <h1>{profile.name}</h1>
+          <p>{profile.headline || "Un espacio deportivo para encontrarse, aprender y moverse."}</p>
+          <div className="club-profile-location"><MapPin size={18} /> {profile.neighborhood ? `${profile.neighborhood}, ` : ""}{profile.city}</div>
+        </div>
+      </section>
+
+      <div className="container club-profile-layout">
+        <div className="club-profile-main">
+          <section className="club-profile-section club-profile-about">
+            <div className="eyebrow eyebrow-blue">CONOCÉ EL CLUB</div>
+            <h2>Un lugar para <em>hacer deporte.</em></h2>
+            <p>{profile.description || "Este club forma parte del directorio deportivo de IIDCA Social Club."}</p>
+            {profile.sports?.length > 0 && <div className="sport-tags club-profile-sports">{profile.sports.map((sport) => <span key={sport}>{sport}</span>)}</div>}
+            {details.length > 0 && <div className="club-profile-facts">{details.map(([label, value]) => <div key={label}><strong>{label}</strong><span>{value}</span></div>)}</div>}
+          </section>
+
+          <section className="club-profile-section" id="instalaciones">
+            <div className="club-profile-section-heading">
+              <div><div className="eyebrow eyebrow-blue">ESPACIOS REALES</div><h2>Instalaciones del club</h2></div>
+              <p>{profile.verification === "VERIFIED" ? "Estas instalaciones fueron declaradas por el club y cuentan con registro fotográfico." : "El club todavía está completando el registro fotográfico de sus instalaciones."}</p>
+            </div>
+            {facilities.length ? (
+              <div className="club-facilities-grid">
+                {facilities.map((facility) => (
+                  <article className="club-facility-card" key={facility.id}>
+                    <div className="club-facility-photos">
+                      {facility.photos?.length ? facility.photos.map((photo, index) => <img key={photo.id} src={photo.url} alt={`${facility.name} de ${profile.name}${index ? `, foto ${index + 1}` : ""}`} loading="lazy" />) : <div className="club-facility-placeholder"><Camera size={28} /><span>Foto pendiente</span></div>}
+                    </div>
+                    <div><Building2 size={19} /><h3>{facility.name}</h3>{facility.photos?.length ? <span><Check size={14} /> Con registro fotográfico</span> : <span className="is-pending"><CircleHelp size={14} /> Sin foto todavía</span>}</div>
+                  </article>
+                ))}
+              </div>
+            ) : <div className="club-facilities-empty"><Building2 size={30} /><h3>Instalaciones pendientes de declarar</h3><p>El club todavía no cargó el detalle de sus espacios.</p></div>}
+          </section>
+
+          {(profile.latitude !== null && profile.longitude !== null) && (
+            <section className="club-profile-section">
+              <div className="eyebrow eyebrow-blue">UBICACIÓN</div>
+              <h2>Cómo llegar</h2>
+              <div className="club-profile-map"><iframe title={`Mapa de ${profile.name}`} src={`https://maps.google.com/maps?q=${profile.latitude},${profile.longitude}&z=16&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /></div>
+              {profile.address && <p className="club-profile-address"><MapPin size={17} /> {profile.address}</p>}
+            </section>
+          )}
+        </div>
+
+        <aside className="club-profile-sidebar">
+          <div className="club-contact-card">
+            <span className="club-verification-kicker">CONTACTO DEL CLUB</span>
+            <h2>¿Querés conocerlo?</h2>
+            <p>Consultá horarios, actividades disponibles y requisitos directamente con el club.</p>
+            {profile.email && <a className="button button-primary full-width" href={`mailto:${profile.email}`}><Mail size={18} /> Escribir por email</a>}
+            {phone && <a className="button button-orange full-width" href={`https://wa.me/${phone.replace("+", "")}`} target="_blank" rel="noopener noreferrer">Contactar por WhatsApp</a>}
+            {profile.website && <a className="club-contact-link" href={profile.website.startsWith("http") ? profile.website : `https://${profile.website}`} target="_blank" rel="noopener noreferrer"><ExternalLink size={17} /> Sitio web</a>}
+            {profile.instagram && <a className="club-contact-link" href={`https://instagram.com/${profile.instagram.replace(/^@/, "")}`} target="_blank" rel="noopener noreferrer"><Sparkles size={17} /> {profile.instagram}</a>}
+          </div>
+          <div className="club-trust-card"><ShieldCheck size={24} /><div><strong>¿Qué significa verificado?</strong><p>Que cada instalación declarada por el club tiene al menos una foto publicada en su ficha.</p></div></div>
+        </aside>
+      </div>
+    </main>
+  );
+}
+
 function FormField({ field, value, onChange }) {
   return (
     <label className="form-field">
@@ -1458,12 +1550,43 @@ function FormField({ field, value, onChange }) {
   );
 }
 
+function FacilityDeclaration({ facilities, onChange }) {
+  const update = (index, value) => onChange(facilities.map((item, itemIndex) => itemIndex === index ? value : item));
+  const remove = (index) => onChange(facilities.filter((_, itemIndex) => itemIndex !== index));
+  return (
+    <fieldset className="facility-declaration">
+      <legend><Building2 size={18} /> Instalaciones del club</legend>
+      <p>Declaralas por separado. Para obtener la insignia, después tendrás que subir al menos una foto de cada una.</p>
+      <div className="facility-declaration-list">
+        {facilities.map((facility, index) => (
+          <div key={index}>
+            <input
+              value={facility}
+              onChange={(event) => update(index, event.target.value)}
+              placeholder="Ej. Cancha de fútbol, pileta o gimnasio"
+              maxLength={120}
+              required
+            />
+            <button type="button" onClick={() => remove(index)} disabled={facilities.length === 1} aria-label={`Quitar instalación ${index + 1}`}>
+              <Trash2 size={17} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button type="button" className="facility-add-button" onClick={() => onChange([...facilities, ""])} disabled={facilities.length >= 12}>
+        <Plus size={16} /> Agregar otra instalación
+      </button>
+    </fieldset>
+  );
+}
+
 function AuthModal({ mode, onClose, onSuccess, onMode }) {
   const [role, setRole] = useState("ATHLETE");
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState(() =>
     mode === "login" || mode === "admin" ? createLoginDefaults(mode === "admin") : createRegistrationDefaults(),
   );
+  const [clubFacilities, setClubFacilities] = useState([]);
   const [accepted, setAccepted] = useState(false);
   const [publicConsent, setPublicConsent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -1511,6 +1634,7 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
         instagram: draft.instagram,
         website: draft.website,
         imageUrl: draft.imageUrl,
+        facilities: role === "CLUB" ? clubFacilities : [],
         details: Object.fromEntries(
           roleFields[role].map((field) => [
             field.name,
@@ -1645,6 +1769,11 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
                       onClick={() => {
                         setRole(item);
                         if (testingMode) setDraft(createRegistrationDefaults(item));
+                        setClubFacilities(item === "CLUB"
+                          ? testingMode
+                            ? ["Cancha de fútbol", "Salón de usos múltiples"]
+                            : [""]
+                          : []);
                       }}
                     >
                       <span className="role-option-icon">{roleIcon(item)}</span>
@@ -1741,6 +1870,9 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
                       />
                     ))}
                   </div>
+                  {role === "CLUB" && (
+                    <FacilityDeclaration facilities={clubFacilities.length ? clubFacilities : [""]} onChange={setClubFacilities} />
+                  )}
                   {role !== "ATHLETE" && (
                     <LocationPicker
                       latitude={draft.latitude}
@@ -1928,6 +2060,132 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
   );
 }
 
+function FacilityManager({ profile, onChange }) {
+  const [newFacility, setNewFacility] = useState("");
+  const [names, setNames] = useState(() => Object.fromEntries((profile.facilities || []).map((facility) => [facility.id, facility.name])));
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  useEffect(() => {
+    setNames(Object.fromEntries((profile.facilities || []).map((facility) => [facility.id, facility.name])));
+  }, [profile.facilities]);
+  const facilities = profile.facilities || [];
+  const completed = facilities.filter((facility) => facility.photos?.length).length;
+  const updateProfile = (nextProfile) => {
+    onChange(nextProfile);
+    setError("");
+  };
+  const addFacility = async (event) => {
+    event.preventDefault();
+    setBusy("new");
+    setError("");
+    try {
+      const data = await api("/me/facilities", { method: "POST", body: JSON.stringify({ name: newFacility }) });
+      setNewFacility("");
+      updateProfile(data.profile);
+    } catch (issue) { setError(issue.message); }
+    finally { setBusy(""); }
+  };
+  const renameFacility = async (facility) => {
+    if (!names[facility.id]?.trim() || names[facility.id].trim() === facility.name) return;
+    setBusy(`rename-${facility.id}`);
+    setError("");
+    try {
+      const data = await api(`/me/facilities/${facility.id}`, { method: "PATCH", body: JSON.stringify({ name: names[facility.id] }) });
+      updateProfile(data.profile);
+    } catch (issue) { setError(issue.message); }
+    finally { setBusy(""); }
+  };
+  const removeFacility = async (facility) => {
+    if (!window.confirm(`¿Querés eliminar “${facility.name}” y todas sus fotos?`)) return;
+    setBusy(`delete-${facility.id}`);
+    setError("");
+    try {
+      const data = await api(`/me/facilities/${facility.id}`, { method: "DELETE" });
+      updateProfile(data.profile);
+    } catch (issue) { setError(issue.message); }
+    finally { setBusy(""); }
+  };
+  const uploadPhoto = async (facility, file) => {
+    if (!file) return;
+    setBusy(`photo-${facility.id}`);
+    setError("");
+    try {
+      const body = new FormData();
+      body.append("photo", file);
+      const response = await fetch(`/api/me/facilities/${facility.id}/photos`, { method: "POST", credentials: "same-origin", body });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "No pudimos subir la foto.");
+      updateProfile(data.profile);
+    } catch (issue) { setError(issue.message); }
+    finally { setBusy(""); }
+  };
+  const removePhoto = async (photo) => {
+    if (!window.confirm("¿Querés eliminar esta foto? El club puede perder la insignia si la instalación queda sin imágenes.")) return;
+    setBusy(`photo-delete-${photo.id}`);
+    setError("");
+    try {
+      const data = await api(`/me/facility-photos/${photo.id}`, { method: "DELETE" });
+      updateProfile(data.profile);
+    } catch (issue) { setError(issue.message); }
+    finally { setBusy(""); }
+  };
+  return (
+    <section className={`dashboard-card facility-manager ${profile.verification === "VERIFIED" ? "is-verified" : ""}`}>
+      <div className="facility-manager-heading">
+        <div className="club-verification-icon">
+          {profile.verification === "VERIFIED" ? <BadgeCheck size={30} /> : <Camera size={30} />}
+        </div>
+        <div>
+          <span className="club-verification-kicker">VERIFICACIÓN POR INSTALACIONES</span>
+          <h2>{profile.verification === "VERIFIED" ? "Club verificado" : "Fotografiá cada instalación"}</h2>
+          <p>{profile.verification === "VERIFIED"
+            ? "Todas las instalaciones declaradas tienen fotos y la insignia ya aparece en tu ficha."
+            : "La insignia se activa automáticamente cuando cada instalación declarada tiene al menos una foto."}</p>
+        </div>
+        <div className="facility-progress" aria-label={`${completed} de ${facilities.length} instalaciones completas`}>
+          <strong>{completed}/{facilities.length}</strong>
+          <span>con fotos</span>
+        </div>
+      </div>
+      <div className="facility-progress-track"><span style={{ width: `${facilities.length ? (completed / facilities.length) * 100 : 0}%` }} /></div>
+      <div className="facility-manager-list">
+        {facilities.map((facility) => (
+          <article className="facility-manager-item" key={facility.id}>
+            <div className="facility-manager-name">
+              <Building2 size={19} />
+              <input value={names[facility.id] || ""} onChange={(event) => setNames({ ...names, [facility.id]: event.target.value })} maxLength={120} aria-label={`Nombre de ${facility.name}`} />
+              <button type="button" disabled={busy === `rename-${facility.id}` || (names[facility.id] || "").trim() === facility.name} onClick={() => renameFacility(facility)}>Guardar nombre</button>
+              <button type="button" className="facility-delete" disabled={facilities.length === 1 || busy === `delete-${facility.id}`} onClick={() => removeFacility(facility)} aria-label={`Eliminar ${facility.name}`}><Trash2 size={17} /></button>
+            </div>
+            <div className="facility-photo-grid">
+              {(facility.photos || []).map((photo) => (
+                <div className="facility-photo" key={photo.id}>
+                  <img src={photo.url} alt={`${facility.name} en ${profile.name}`} />
+                  <button type="button" onClick={() => removePhoto(photo)} disabled={busy === `photo-delete-${photo.id}`} aria-label={`Eliminar foto de ${facility.name}`}><X size={15} /></button>
+                </div>
+              ))}
+              {facility.photos?.length < 6 && (
+                <label className="facility-photo-upload">
+                  <Camera size={22} />
+                  <span>{busy === `photo-${facility.id}` ? "Subiendo..." : facility.photos?.length ? "Otra foto" : "Subir foto"}</span>
+                  <small>JPG, PNG o WebP · máx. 5 MB</small>
+                  <input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy === `photo-${facility.id}`} onChange={(event) => { uploadPhoto(facility, event.target.files?.[0]); event.target.value = ""; }} />
+                </label>
+              )}
+            </div>
+            {!facility.photos?.length && <p className="facility-missing"><CircleHelp size={15} /> Falta una foto para completar esta instalación.</p>}
+          </article>
+        ))}
+      </div>
+      <form className="facility-new-form" onSubmit={addFacility}>
+        <label>¿Tenés otra instalación?<input value={newFacility} onChange={(event) => setNewFacility(event.target.value)} maxLength={120} placeholder="Ej. Vestuarios renovados" required /></label>
+        <button className="button button-outline" disabled={busy === "new" || facilities.length >= 12}><Plus size={17} /> Agregar instalación</button>
+      </form>
+      {error && <div className="feedback error" role="alert">{error}</div>}
+    </section>
+  );
+}
+
 function MemberProfile({ user, onUpdate, onExplore }) {
   const profile = user.profile;
   const [edit, setEdit] = useState(false);
@@ -1935,7 +2193,6 @@ function MemberProfile({ user, onUpdate, onExplore }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
-  const [verificationBusy, setVerificationBusy] = useState(false);
   if (!profile) return null;
   const update = async (event) => {
     event.preventDefault();
@@ -1978,20 +2235,6 @@ function MemberProfile({ user, onUpdate, onExplore }) {
       setError(issue.message);
     } finally {
       setLoading(false);
-    }
-  };
-  const requestVerification = async () => {
-    setVerificationBusy(true);
-    setError("");
-    setSuccess("");
-    try {
-      const data = await api("/me/verification-request", { method: "POST" });
-      onUpdate({ ...user, profile: { ...profile, verificationRequestStatus: data.request.status } });
-      setSuccess("Recibimos tu solicitud. Te avisaremos cuando la revisión avance.");
-    } catch (issue) {
-      setError(issue.message);
-    } finally {
-      setVerificationBusy(false);
     }
   };
   return (
@@ -2070,26 +2313,13 @@ function MemberProfile({ user, onUpdate, onExplore }) {
           </section>
         </div>
         {user.role === "CLUB" && (
-          <section className={`dashboard-card club-verification-card ${profile.verification === "VERIFIED" ? "is-verified" : ""}`}>
-            <div className="club-verification-icon">
-              {profile.verification === "VERIFIED" ? <BadgeCheck size={30} /> : <ShieldCheck size={30} />}
-            </div>
-            <div>
-              <span className="club-verification-kicker">IDENTIDAD DEL CLUB</span>
-              <h2>{profile.verification === "VERIFIED" ? "Club verificado" : profile.verificationRequestStatus === "PENDING" ? "Verificación en revisión" : "Verificá tu club"}</h2>
-              <p>{profile.verification === "VERIFIED"
-                ? "La insignia de verificación ya aparece junto al nombre de tu club en el directorio."
-                : profile.verificationRequestStatus === "PENDING"
-                  ? "El equipo de IIDCA recibió la solicitud. Los requisitos y la documentación se incorporarán en la próxima etapa del proceso."
-                  : "Solicitá la revisión para que, una vez aprobada, tu perfil muestre la insignia de club verificado. Pronto vamos a sumar los requisitos específicos."}</p>
-            </div>
-            {profile.verification !== "VERIFIED" && profile.verificationRequestStatus !== "PENDING" && (
-              <button className="button button-orange" type="button" disabled={verificationBusy} onClick={requestVerification}>
-                {verificationBusy ? "Enviando..." : "Verificá tu club"} <ArrowUpRight size={18} />
-              </button>
-            )}
-            {profile.verificationRequestStatus === "PENDING" && <span className="verification-review-badge"><CircleHelp size={16} /> En revisión</span>}
-          </section>
+          <FacilityManager
+            profile={profile}
+            onChange={(nextProfile) => {
+              onUpdate({ ...user, profile: nextProfile });
+              setDraft(nextProfile);
+            }}
+          />
         )}
         {success && (
           <div className="feedback success" role="status">
@@ -2714,7 +2944,7 @@ function Footer({ onNavigate, onAuth }) {
 
 export default function App() {
   const routeFromHash = () =>
-    (window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/")) ? "admin" : window.location.pathname.startsWith("/novedades/") ? "article" : window.location.pathname === "/novedades" ? "news" : ({
+    (window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/")) ? "admin" : window.location.pathname.startsWith("/clubes/") ? "club" : window.location.pathname.startsWith("/novedades/") ? "article" : window.location.pathname === "/novedades" ? "news" : ({
       "#explorar": "explore",
       "#mi-espacio": "profile",
     })[window.location.hash] || "home";
@@ -2729,6 +2959,9 @@ export default function App() {
   const [articles, setArticles] = useState([]);
   const [newsLoading, setNewsLoading] = useState(true);
   const [newsError, setNewsError] = useState("");
+  const [clubProfile, setClubProfile] = useState(null);
+  const [clubLoading, setClubLoading] = useState(false);
+  const [clubError, setClubError] = useState("");
 
   useEffect(() => {
     api("/me")
@@ -2766,6 +2999,19 @@ export default function App() {
     api("/news").then((data) => { setArticles(data.articles); setNewsError(""); }).catch((issue) => setNewsError(issue.message)).finally(() => setNewsLoading(false));
   }, [view]);
   useEffect(() => {
+    if (view !== "club") return;
+    const id = decodeURIComponent(window.location.pathname.split("/")[2] || "");
+    setClubLoading(true);
+    setClubError("");
+    setClubProfile(null);
+    let cancelled = false;
+    api(`/profiles/${id}`)
+      .then((data) => { if (!cancelled) setClubProfile(data.profile); })
+      .catch((issue) => { if (!cancelled) setClubError(issue.message); })
+      .finally(() => { if (!cancelled) setClubLoading(false); });
+    return () => { cancelled = true; };
+  }, [view]);
+  useEffect(() => {
     const onHash = () => setView(routeFromHash());
     window.addEventListener("hashchange", onHash);
     window.addEventListener("popstate", onHash);
@@ -2781,7 +3027,7 @@ export default function App() {
       explore: "explorar",
       profile: "mi-espacio",
     };
-    window.history.pushState(null, "", next === "admin" ? "/admin" : next === "news" ? "/novedades" : next === "article" ? `/novedades/${encodeURIComponent(anchor)}` : next === "home" ? "/" : `/#${hashes[next]}`);
+    window.history.pushState(null, "", next === "admin" ? "/admin" : next === "news" ? "/novedades" : next === "article" ? `/novedades/${encodeURIComponent(anchor)}` : next === "club" ? `/clubes/${encodeURIComponent(anchor)}` : next === "home" ? "/" : `/#${hashes[next]}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (anchor && next === "home")
       window.setTimeout(
@@ -2824,6 +3070,7 @@ export default function App() {
       )}
       {view === "news" && <NewsPage articles={articles} loading={newsLoading} error={newsError} onNavigate={navigate} />}
       {view === "article" && <NewsArticle article={articles.find((item) => item.slug === decodeURIComponent(window.location.pathname.split("/")[2] || ""))} loading={newsLoading} onNavigate={navigate} />}
+      {view === "club" && <ClubProfilePage profile={clubProfile} loading={clubLoading} error={clubError} onNavigate={navigate} />}
       {view === "explore" && (
         <Explore
           filters={filters}
@@ -2869,6 +3116,7 @@ export default function App() {
         onClose={() => setSelectedProfile(null)}
         user={user}
         onAuth={setAuthMode}
+        onNavigate={navigate}
       />
     </>
   );

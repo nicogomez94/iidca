@@ -92,12 +92,36 @@ model Profile {
   imageIllustrative    Boolean                   @default(false)
   claims               ClaimRequest[]
   verificationRequests ClubVerificationRequest[]
+  facilities           ClubFacility[]
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
 
   @@index([status, category])
   @@index([city])
   @@index([sport])
+}
+
+model ClubFacility {
+  id        String          @id @default(cuid())
+  profileId String
+  profile   Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name      String
+  sortOrder Int             @default(0)
+  photos    FacilityPhoto[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([profileId, sortOrder])
+}
+
+model FacilityPhoto {
+  id         String       @id @default(cuid())
+  facilityId String
+  facility   ClubFacility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  url        String
+  createdAt  DateTime     @default(now())
+
+  @@index([facilityId, createdAt])
 }
 
 model ClubVerificationRequest {

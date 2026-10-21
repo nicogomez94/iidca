@@ -129,11 +129,6 @@ export const roleFields = {
       label: "Días y horarios",
       placeholder: "Lunes a viernes, 17 a 21 h",
     },
-    {
-      name: "facilities",
-      label: "Infraestructura",
-      placeholder: "Canchas, salón, gimnasio",
-    },
     { name: "ages", label: "Edades admitidas" },
   ],
   FEDERATION: [
