@@ -105,7 +105,7 @@ const facilityPhotoUpload = multer({
       callback(null, `${Date.now()}-${crypto.randomBytes(12).toString("hex")}${extensions[file.mimetype] || ""}`);
     },
   }),
-  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  limits: { fileSize: 5 * 1024 * 1024, files: 6 },
   fileFilter: (_req, file, callback) => {
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.mimetype))
       return callback(validationError("La foto debe ser JPG, PNG o WebP."));
@@ -624,37 +624,45 @@ app.delete("/api/me/facilities/:id", auth, async (req, res, next) => {
   }
 });
 
-app.post("/api/me/facilities/:id/photos", claimLimiter, auth, facilityPhotoUpload.single("photo"), async (req, res, next) => {
-  try {
-    const profile = ownedClubProfile(req);
-    const facility = profile
-      ? await prisma.clubFacility.findFirst({ where: { id: req.params.id, profileId: profile.id }, include: { _count: { select: { photos: true } } } })
-      : null;
-    if (!facility) {
-      if (req.file) await fs.promises.unlink(req.file.path).catch(() => {});
-      return res.status(404).json({ error: "Instalación no encontrada." });
-    }
-    if (!req.file) throw validationError("Elegí una foto para subir.");
-    if (facility._count.photos >= 6) {
-      await fs.promises.unlink(req.file.path).catch(() => {});
-      throw validationError("Podés subir hasta 6 fotos por instalación.");
-    }
-    const url = `/uploads/${req.file.filename}`;
+app.post(
+  "/api/me/facilities/:id/photos",
+  claimLimiter,
+  auth,
+  facilityPhotoUpload.fields([{ name: "photos", maxCount: 6 }, { name: "photo", maxCount: 1 }]),
+  async (req, res, next) => {
     try {
-      await prisma.$transaction(async (tx) => {
-        await tx.facilityPhoto.create({ data: { facilityId: facility.id, url } });
-        await syncClubVerification(profile.id, tx);
-      });
+      const uploadedFiles = [...(req.files?.photos || []), ...(req.files?.photo || [])];
+      const profile = ownedClubProfile(req);
+      const facility = profile
+        ? await prisma.clubFacility.findFirst({ where: { id: req.params.id, profileId: profile.id }, include: { _count: { select: { photos: true } } } })
+        : null;
+      if (!facility) {
+        await Promise.all(uploadedFiles.map((file) => fs.promises.unlink(file.path).catch(() => {})));
+        return res.status(404).json({ error: "Instalación no encontrada." });
+      }
+      if (!uploadedFiles.length) throw validationError("Elegí al menos una foto para subir.");
+      if (facility._count.photos + uploadedFiles.length > 6) {
+        await Promise.all(uploadedFiles.map((file) => fs.promises.unlink(file.path).catch(() => {})));
+        throw validationError("Podés subir hasta 6 fotos por instalación.");
+      }
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx.facilityPhoto.createMany({
+            data: uploadedFiles.map((file) => ({ facilityId: facility.id, url: `/uploads/${file.filename}` })),
+          });
+          await syncClubVerification(profile.id, tx);
+        });
+      } catch (error) {
+        await Promise.all(uploadedFiles.map((file) => fs.promises.unlink(file.path).catch(() => {})));
+        throw error;
+      }
+      await audit(req.user.id, "CLUB_FACILITY_PHOTO_ADDED", profile.id, { facilityId: facility.id, count: uploadedFiles.length });
+      res.status(201).json({ profile: await accountProfile(profile.id) });
     } catch (error) {
-      await fs.promises.unlink(req.file.path).catch(() => {});
-      throw error;
+      next(error);
     }
-    await audit(req.user.id, "CLUB_FACILITY_PHOTO_ADDED", profile.id, { facilityId: facility.id });
-    res.status(201).json({ profile: await accountProfile(profile.id) });
-  } catch (error) {
-    next(error);
   }
-});
+);
 
 app.delete("/api/me/facility-photos/:id", auth, async (req, res, next) => {
   try {

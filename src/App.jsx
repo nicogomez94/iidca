@@ -32,6 +32,7 @@ import {
   LogIn,
   Mail,
   MapPin,
+  Maximize2,
   Menu,
   Navigation,
   Plus,
@@ -85,6 +86,70 @@ function roleIcon(role, size = 22) {
 
 function categoryLabel(role) {
   return roleLabels[role] || role;
+}
+
+function PhotoSlideshow({ photos, initialIndex = 0, title, subtitle, onClose }) {
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const total = photos.length;
+  const goTo = (index) => setActiveIndex((index + total) % total);
+  useEffect(() => setActiveIndex(initialIndex), [initialIndex, photos]);
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+      if (event.key === "ArrowLeft" && total > 1) goTo(activeIndex - 1);
+      if (event.key === "ArrowRight" && total > 1) goTo(activeIndex + 1);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [activeIndex, onClose, total]);
+  if (!total) return null;
+  return createPortal(
+    <div className="photo-lightbox" role="dialog" aria-modal="true" aria-label={`Fotos de ${title}`} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="photo-lightbox-panel">
+        <header>
+          <div><span>GALERÍA DE LA INSTALACIÓN</span><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>
+          <button type="button" className="photo-lightbox-close" onClick={onClose} aria-label="Cerrar galería"><X size={24} /></button>
+        </header>
+        <div className="photo-lightbox-stage">
+          <img src={photos[activeIndex].url} alt={`${title}, foto ${activeIndex + 1} de ${total}`} />
+          {total > 1 && <>
+            <button type="button" className="photo-lightbox-arrow is-previous" onClick={() => goTo(activeIndex - 1)} aria-label="Foto anterior"><ChevronLeft size={31} /></button>
+            <button type="button" className="photo-lightbox-arrow is-next" onClick={() => goTo(activeIndex + 1)} aria-label="Foto siguiente"><ChevronRight size={31} /></button>
+          </>}
+          <span className="photo-lightbox-counter">{activeIndex + 1} / {total}</span>
+        </div>
+        {total > 1 && <div className="photo-lightbox-thumbnails" aria-label="Elegir foto">
+          {photos.map((photo, index) => <button type="button" key={photo.id || photo.url} className={index === activeIndex ? "is-active" : ""} onClick={() => goTo(index)} aria-label={`Ver foto ${index + 1}`} aria-current={index === activeIndex ? "true" : undefined}><img src={photo.url} alt="" /></button>)}
+        </div>}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function ClubFacilitiesGallery({ facilities, profile }) {
+  const [gallery, setGallery] = useState(null);
+  return <>
+    <div className="club-facilities-grid">
+      {facilities.map((facility) => {
+        const photos = facility.photos || [];
+        return <article className="club-facility-card" key={facility.id}>
+          {photos.length ? <button type="button" className="club-facility-photo-button" onClick={() => setGallery({ facility, index: 0 })} aria-label={`Ampliar fotos de ${facility.name}`}>
+            <img src={photos[0].url} alt={`${facility.name} de ${profile.name}`} loading="lazy" />
+            <span className="club-facility-expand"><Maximize2 size={15} /> Ampliar</span>
+            <span className="club-facility-photo-count"><Camera size={14} /> {photos.length}</span>
+          </button> : <div className="club-facility-placeholder"><Camera size={28} /><span>Foto pendiente</span></div>}
+          <div><Building2 size={19} /><h3>{facility.name}</h3>{photos.length ? <span><Check size={14} /> {photos.length === 1 ? "1 foto publicada" : `${photos.length} fotos publicadas`}</span> : <span className="is-pending"><CircleHelp size={14} /> Sin foto todavía</span>}</div>
+        </article>;
+      })}
+    </div>
+    {gallery && <PhotoSlideshow photos={gallery.facility.photos} initialIndex={gallery.index} title={gallery.facility.name} subtitle={profile.name} onClose={() => setGallery(null)} />}
+  </>;
 }
 
 function Brand({ onClick, inverse = false }) {
@@ -1471,16 +1536,7 @@ function ClubProfilePage({ profile, loading, error, onNavigate }) {
               <p>{profile.verification === "VERIFIED" ? "Estas instalaciones fueron declaradas por el club y cuentan con registro fotográfico." : "El club todavía está completando el registro fotográfico de sus instalaciones."}</p>
             </div>
             {facilities.length ? (
-              <div className="club-facilities-grid">
-                {facilities.map((facility) => (
-                  <article className="club-facility-card" key={facility.id}>
-                    <div className="club-facility-photos">
-                      {facility.photos?.length ? facility.photos.map((photo, index) => <img key={photo.id} src={photo.url} alt={`${facility.name} de ${profile.name}${index ? `, foto ${index + 1}` : ""}`} loading="lazy" />) : <div className="club-facility-placeholder"><Camera size={28} /><span>Foto pendiente</span></div>}
-                    </div>
-                    <div><Building2 size={19} /><h3>{facility.name}</h3>{facility.photos?.length ? <span><Check size={14} /> Con registro fotográfico</span> : <span className="is-pending"><CircleHelp size={14} /> Sin foto todavía</span>}</div>
-                  </article>
-                ))}
-              </div>
+              <ClubFacilitiesGallery facilities={facilities} profile={profile} />
             ) : <div className="club-facilities-empty"><Building2 size={30} /><h3>Instalaciones pendientes de declarar</h3><p>El club todavía no cargó el detalle de sus espacios.</p></div>}
           </section>
 
@@ -2062,6 +2118,7 @@ function FacilityManager({ profile, onChange }) {
   const [names, setNames] = useState(() => Object.fromEntries((profile.facilities || []).map((facility) => [facility.id, facility.name])));
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [gallery, setGallery] = useState(null);
   useEffect(() => {
     setNames(Object.fromEntries((profile.facilities || []).map((facility) => [facility.id, facility.name])));
   }, [profile.facilities]);
@@ -2102,13 +2159,18 @@ function FacilityManager({ profile, onChange }) {
     } catch (issue) { setError(issue.message); }
     finally { setBusy(""); }
   };
-  const uploadPhoto = async (facility, file) => {
-    if (!file) return;
+  const uploadPhotos = async (facility, files) => {
+    const selectedFiles = Array.from(files || []);
+    if (!selectedFiles.length) return;
+    if ((facility.photos?.length || 0) + selectedFiles.length > 6) {
+      setError(`Podés elegir hasta ${6 - (facility.photos?.length || 0)} foto${6 - (facility.photos?.length || 0) === 1 ? "" : "s"} más para ${facility.name}.`);
+      return;
+    }
     setBusy(`photo-${facility.id}`);
     setError("");
     try {
       const body = new FormData();
-      body.append("photo", file);
+      selectedFiles.forEach((file) => body.append("photos", file));
       const response = await fetch(`/api/me/facilities/${facility.id}/photos`, { method: "POST", credentials: "same-origin", body });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "No pudimos subir la foto.");
@@ -2157,16 +2219,16 @@ function FacilityManager({ profile, onChange }) {
             <div className="facility-photo-grid">
               {(facility.photos || []).map((photo) => (
                 <div className="facility-photo" key={photo.id}>
-                  <img src={photo.url} alt={`${facility.name} en ${profile.name}`} />
-                  <button type="button" onClick={() => removePhoto(photo)} disabled={busy === `photo-delete-${photo.id}`} aria-label={`Eliminar foto de ${facility.name}`}><X size={15} /></button>
+                  <button type="button" className="facility-photo-preview" onClick={() => setGallery({ facility, index: facility.photos.findIndex((item) => item.id === photo.id) })} aria-label={`Ampliar foto de ${facility.name}`}><img src={photo.url} alt={`${facility.name} en ${profile.name}`} /><span><Maximize2 size={14} /></span></button>
+                  <button type="button" className="facility-photo-delete" onClick={() => removePhoto(photo)} disabled={busy === `photo-delete-${photo.id}`} aria-label={`Eliminar foto de ${facility.name}`}><X size={15} /></button>
                 </div>
               ))}
               {facility.photos?.length < 6 && (
                 <label className="facility-photo-upload">
                   <Camera size={22} />
-                  <span>{busy === `photo-${facility.id}` ? "Subiendo..." : facility.photos?.length ? "Otra foto" : "Subir foto"}</span>
-                  <small>JPG, PNG o WebP · máx. 5 MB</small>
-                  <input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy === `photo-${facility.id}`} onChange={(event) => { uploadPhoto(facility, event.target.files?.[0]); event.target.value = ""; }} />
+                  <span>{busy === `photo-${facility.id}` ? "Subiendo..." : facility.photos?.length ? "Agregar fotos" : "Subir fotos"}</span>
+                  <small>Elegí varias · máx. 6</small>
+                  <input type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy === `photo-${facility.id}`} onChange={(event) => { uploadPhotos(facility, event.target.files); event.target.value = ""; }} />
                 </label>
               )}
             </div>
@@ -2179,6 +2241,7 @@ function FacilityManager({ profile, onChange }) {
         <button className="button button-outline" disabled={busy === "new" || facilities.length >= 12}><Plus size={17} /> Agregar instalación</button>
       </form>
       {error && <div className="feedback error" role="alert">{error}</div>}
+      {gallery && <PhotoSlideshow photos={gallery.facility.photos} initialIndex={gallery.index} title={gallery.facility.name} subtitle={profile.name} onClose={() => setGallery(null)} />}
     </section>
   );
 }
