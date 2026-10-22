@@ -17,6 +17,8 @@ import {
   Building2,
   Camera,
   Check,
+  ChevronLeft,
+  ChevronRight,
   CircleHelp,
   Compass,
   Download,
@@ -24,6 +26,7 @@ import {
   ExternalLink,
   FileSpreadsheet,
   Heart,
+  ImagePlus,
   LocateFixed,
   LockKeyhole,
   LogIn,
@@ -1633,7 +1636,6 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
         phone: role === "ATHLETE" ? null : draft.phone,
         instagram: draft.instagram,
         website: draft.website,
-        imageUrl: draft.imageUrl,
         facilities: role === "CLUB" ? clubFacilities : [],
         details: Object.fromEntries(
           roleFields[role].map((field) => [
@@ -1982,11 +1984,6 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
                           value={draft.website}
                           onChange={(value) => change("website", value)}
                         />
-                        <FormField
-                          field={{ label: "URL HTTPS de una foto propia o autorizada" }}
-                          value={draft.imageUrl || ""}
-                          onChange={(value) => change("imageUrl", value)}
-                        />
                       </>
                     )}
                   </div>
@@ -2186,19 +2183,128 @@ function FacilityManager({ profile, onChange }) {
   );
 }
 
-function MemberProfile({ user, onUpdate, onExplore }) {
-  const profile = user.profile;
-  const [edit, setEdit] = useState(false);
-  const [draft, setDraft] = useState(profile || {});
+function ProfilePhotoLibrary({ profile, role, onChange }) {
+  const managedPhotos = profile.profilePhotos || [];
+  const photos = profile.imageUrl && !managedPhotos.some((photo) => photo.url === profile.imageUrl)
+    ? [{ id: "current-cover", url: profile.imageUrl, legacy: true }, ...managedPhotos]
+    : managedPhotos;
+  const coverIndex = Math.max(0, photos.findIndex((photo) => photo.url === profile.imageUrl));
+  const [selectedIndex, setSelectedIndex] = useState(coverIndex);
+  const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  useEffect(() => {
+    setSelectedIndex((current) => Math.min(current, Math.max(photos.length - 1, 0)));
+  }, [photos.length]);
+  const selected = photos[selectedIndex];
+  const upload = async (fileList) => {
+    const files = [...(fileList || [])];
+    if (!files.length) return;
+    if (managedPhotos.length + files.length > 8) {
+      setError(`Podés guardar hasta 8 fotos. Te quedan ${8 - managedPhotos.length} lugares.`);
+      return;
+    }
+    setBusy("upload");
+    setError("");
+    try {
+      let nextProfile = profile;
+      for (const file of files) {
+        const body = new FormData();
+        body.append("photo", file);
+        const response = await fetch("/api/me/profile-photos", { method: "POST", credentials: "same-origin", body });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || "No pudimos subir la foto.");
+        nextProfile = data.profile;
+        onChange(nextProfile);
+      }
+      const nextPhotos = nextProfile.profilePhotos || [];
+      const keepsLegacyCover = nextProfile.imageUrl && !nextPhotos.some((photo) => photo.url === nextProfile.imageUrl);
+      setSelectedIndex(Math.max(0, nextPhotos.length - 1 + (keepsLegacyCover ? 1 : 0)));
+    } catch (issue) {
+      setError(issue.message);
+    } finally {
+      setBusy("");
+    }
+  };
+  const chooseCover = async () => {
+    if (!selected || selected.legacy || selected.url === profile.imageUrl) return;
+    setBusy(`cover-${selected.id}`);
+    setError("");
+    try {
+      const data = await api(`/me/profile-photos/${selected.id}/cover`, { method: "PATCH", body: "{}" });
+      onChange(data.profile);
+    } catch (issue) {
+      setError(issue.message);
+    } finally {
+      setBusy("");
+    }
+  };
+  const remove = async () => {
+    if (!selected || selected.legacy || !window.confirm("¿Querés eliminar esta foto de tu perfil?")) return;
+    setBusy(`delete-${selected.id}`);
+    setError("");
+    try {
+      const data = await api(`/me/profile-photos/${selected.id}`, { method: "DELETE" });
+      onChange(data.profile);
+      setSelectedIndex((current) => Math.max(0, current - 1));
+    } catch (issue) {
+      setError(issue.message);
+    } finally {
+      setBusy("");
+    }
+  };
+  const move = (direction) => setSelectedIndex((current) => (current + direction + photos.length) % photos.length);
+  return (
+    <section className="profile-photo-library">
+      <div className="profile-photo-copy">
+        <span className="profile-editor-kicker">FOTOTECA DEL PERFIL</span>
+        <h3>Elegí cómo querés presentarte.</h3>
+        <p>{role === "ATHLETE" ? "Estas fotos quedan dentro de tu espacio privado." : "La portada seleccionada aparecerá en el directorio y en tu ficha pública."}</p>
+      </div>
+      <div className="profile-photo-workspace">
+        <div className={`profile-photo-stage ${selected ? "has-photo" : "is-empty"}`}>
+          {selected ? <img src={selected.url} alt={`Vista previa de ${profile.name}`} /> : <div><ImagePlus size={34} /><strong>Todavía no cargaste fotos</strong><span>Elegí imágenes desde tu dispositivo.</span></div>}
+          {selected?.url === profile.imageUrl && <span className="profile-photo-cover-badge"><Check size={14} /> Portada actual</span>}
+          {photos.length > 1 && <>
+            <button type="button" className="profile-photo-arrow previous" onClick={() => move(-1)} aria-label="Foto anterior"><ChevronLeft size={22} /></button>
+            <button type="button" className="profile-photo-arrow next" onClick={() => move(1)} aria-label="Foto siguiente"><ChevronRight size={22} /></button>
+          </>}
+        </div>
+        <div className="profile-photo-actions">
+          <label className="profile-photo-upload-button">
+            <Upload size={17} /> {busy === "upload" ? "Subiendo..." : photos.length ? "Agregar fotos" : "Elegir fotos"}
+            <input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy === "upload" || managedPhotos.length >= 8} onChange={(event) => { upload(event.target.files); event.target.value = ""; }} />
+          </label>
+          {selected && !selected.legacy && <button type="button" className="profile-photo-cover-button" disabled={selected.url === profile.imageUrl || Boolean(busy)} onClick={chooseCover}><Camera size={17} /> {selected.url === profile.imageUrl ? "Es la portada" : "Usar como portada"}</button>}
+          {selected && !selected.legacy && <button type="button" className="profile-photo-remove-button" disabled={Boolean(busy)} onClick={remove} aria-label="Eliminar foto seleccionada"><Trash2 size={17} /></button>}
+        </div>
+        {photos.length > 0 && <div className="profile-photo-thumbnails" aria-label="Fotos del perfil">
+          {photos.map((photo, index) => <button type="button" key={photo.id} className={`${index === selectedIndex ? "selected" : ""} ${photo.url === profile.imageUrl ? "is-cover" : ""}`} onClick={() => setSelectedIndex(index)} aria-label={`Ver foto ${index + 1}${photo.url === profile.imageUrl ? ", portada actual" : ""}`}><img src={photo.url} alt="" />{photo.url === profile.imageUrl && <Check size={12} />}</button>)}
+        </div>}
+        <small className="profile-photo-help">JPG, PNG o WebP · hasta 5 MB por foto · máximo 8</small>
+        {error && <div className="feedback error" role="alert">{error}</div>}
+      </div>
+    </section>
+  );
+}
+
+function ProfileEditModal({ user, profile, onClose, onSaved, onProfileChange }) {
+  const [draft, setDraft] = useState(profile);
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  if (!profile) return null;
+  useEffect(() => {
+    const closeOnEscape = (event) => event.key === "Escape" && onClose();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [onClose]);
   const update = async (event) => {
     event.preventDefault();
     setLoading(true);
     setError("");
-    setSuccess("");
     try {
       const data = await api("/me/profile", {
         method: "PATCH",
@@ -2207,10 +2313,7 @@ function MemberProfile({ user, onUpdate, onExplore }) {
           city: draft.city,
           neighborhood: draft.neighborhood,
           sport: draft.sport,
-          sports:
-            typeof draft.sports === "string"
-              ? draft.sports.split(",")
-              : draft.sports,
+          sports: typeof draft.sports === "string" ? draft.sports.split(",") : draft.sports,
           headline: draft.headline,
           description: draft.description,
           address: draft.address,
@@ -2220,23 +2323,58 @@ function MemberProfile({ user, onUpdate, onExplore }) {
           phone: draft.phone,
           instagram: draft.instagram,
           website: draft.website,
-          imageUrl: draft.imageUrl,
         }),
       });
-      onUpdate({ ...user, profile: data.profile });
-      setDraft(data.profile);
-      setEdit(false);
-      setSuccess(
-        user.role === "ATHLETE"
-          ? "Tus cambios se guardaron."
-          : "Tus cambios se guardaron. El perfil quedó pendiente de revisión.",
-      );
+      onSaved(data.profile);
     } catch (issue) {
       setError(issue.message);
     } finally {
       setLoading(false);
     }
   };
+  return createPortal(
+    <div className="modal-backdrop profile-editor-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="profile-editor-modal" role="dialog" aria-modal="true" aria-label="Editar mi perfil">
+        <header className="profile-editor-header">
+          <div><span className="profile-editor-kicker">TU IDENTIDAD EN IIDCA</span><h2>Editar mi perfil</h2><p>Actualizá tus datos y elegí tus fotos sin salir de esta ventana.</p></div>
+          <button type="button" onClick={onClose} aria-label="Cerrar"><X size={22} /></button>
+        </header>
+        <ProfilePhotoLibrary profile={profile} role={user.role} onChange={onProfileChange} />
+        <form onSubmit={update} className="profile-editor-form">
+          <div className="profile-editor-form-heading"><div><span className="profile-editor-kicker">INFORMACIÓN DEL PERFIL</span><h3>Tus datos</h3></div><p>Los campos públicos vuelven a revisión cuando guardás cambios.</p></div>
+          <div className="form-grid">
+            <FormField field={{ label: "Nombre", required: true }} value={draft.name} onChange={(value) => setDraft({ ...draft, name: value })} />
+            <FormField field={{ label: "Ciudad", required: true }} value={draft.city} onChange={(value) => setDraft({ ...draft, city: value })} />
+            <FormField field={{ label: "Barrio o zona" }} value={draft.neighborhood} onChange={(value) => setDraft({ ...draft, neighborhood: value })} />
+            <FormField field={{ label: "Deporte principal" }} value={draft.sport} onChange={(value) => setDraft({ ...draft, sport: value })} />
+            <FormField field={{ label: "Deportes (separados por comas)" }} value={Array.isArray(draft.sports) ? draft.sports.join(", ") : draft.sports} onChange={(value) => setDraft({ ...draft, sports: value })} />
+            {user.role !== "ATHLETE" && <>
+              <FormField field={{ label: "Dirección" }} value={draft.address} onChange={(value) => setDraft({ ...draft, address: value })} />
+              <FormField field={{ label: "Email público", type: "email" }} value={draft.email} onChange={(value) => setDraft({ ...draft, email: value })} />
+              <FormField field={{ label: "WhatsApp público" }} value={draft.phone} onChange={(value) => setDraft({ ...draft, phone: value })} />
+              <FormField field={{ label: "Instagram" }} value={draft.instagram} onChange={(value) => setDraft({ ...draft, instagram: value })} />
+              <FormField field={{ label: "Sitio web" }} value={draft.website} onChange={(value) => setDraft({ ...draft, website: value })} />
+            </>}
+          </div>
+          {user.role !== "ATHLETE" && <>
+            <LocationPicker latitude={draft.latitude} longitude={draft.longitude} onChoose={({ lat, lng }) => setDraft({ ...draft, latitude: lat, longitude: lng })} />
+            <FormField field={{ label: "Frase principal" }} value={draft.headline} onChange={(value) => setDraft({ ...draft, headline: value })} />
+            <FormField field={{ label: "Descripción", type: "textarea" }} value={draft.description} onChange={(value) => setDraft({ ...draft, description: value })} />
+          </>}
+          {error && <div className="feedback error" role="alert">{error}</div>}
+          <footer className="profile-editor-footer"><button type="button" className="button button-ghost" onClick={onClose}>Cancelar</button><button className="button button-primary" disabled={loading}>{loading ? "Guardando..." : "Guardar cambios"} <Check size={18} /></button></footer>
+        </form>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function MemberProfile({ user, onUpdate, onExplore }) {
+  const profile = user.profile;
+  const [edit, setEdit] = useState(false);
+  const [success, setSuccess] = useState("");
+  if (!profile) return null;
   return (
     <main className="dashboard-page">
       <div className="container dashboard-container">
@@ -2283,9 +2421,9 @@ function MemberProfile({ user, onUpdate, onExplore }) {
             )}
             <button
               className="button button-outline full-width"
-              onClick={() => setEdit(!edit)}
+              onClick={() => setEdit(true)}
             >
-              {edit ? "Cancelar edición" : "Editar mi perfil"}{" "}
+              Editar mi perfil{" "}
               <ArrowRight size={18} />
             </button>
           </section>
@@ -2317,7 +2455,6 @@ function MemberProfile({ user, onUpdate, onExplore }) {
             profile={profile}
             onChange={(nextProfile) => {
               onUpdate({ ...user, profile: nextProfile });
-              setDraft(nextProfile);
             }}
           />
         )}
@@ -2326,124 +2463,17 @@ function MemberProfile({ user, onUpdate, onExplore }) {
             {success}
           </div>
         )}
-        {edit && (
-          <section className="dashboard-card edit-panel">
-            <h2>Editar datos de tu perfil</h2>
-            <p>
-              La información que modifiques se reflejará en tu ficha cuando esté
-              publicada.
-            </p>
-            <form onSubmit={update} className="auth-form">
-              <div className="form-grid">
-                <FormField
-                  field={{ label: "Nombre", required: true }}
-                  value={draft.name}
-                  onChange={(value) => setDraft({ ...draft, name: value })}
-                />
-                <FormField
-                  field={{ label: "Ciudad", required: true }}
-                  value={draft.city}
-                  onChange={(value) => setDraft({ ...draft, city: value })}
-                />
-                <FormField
-                  field={{ label: "Barrio o zona" }}
-                  value={draft.neighborhood}
-                  onChange={(value) =>
-                    setDraft({ ...draft, neighborhood: value })
-                  }
-                />
-                <FormField
-                  field={{ label: "Deporte principal" }}
-                  value={draft.sport}
-                  onChange={(value) => setDraft({ ...draft, sport: value })}
-                />
-                <FormField
-                  field={{ label: "Deportes (separados por comas)" }}
-                  value={
-                    Array.isArray(draft.sports)
-                      ? draft.sports.join(", ")
-                      : draft.sports
-                  }
-                  onChange={(value) => setDraft({ ...draft, sports: value })}
-                />
-                {user.role !== "ATHLETE" && (
-                  <>
-                    <FormField
-                      field={{ label: "Dirección" }}
-                      value={draft.address}
-                      onChange={(value) =>
-                        setDraft({ ...draft, address: value })
-                      }
-                    />
-                    <FormField
-                      field={{ label: "Email público", type: "email" }}
-                      value={draft.email}
-                      onChange={(value) => setDraft({ ...draft, email: value })}
-                    />
-                    <FormField
-                      field={{ label: "WhatsApp público" }}
-                      value={draft.phone}
-                      onChange={(value) => setDraft({ ...draft, phone: value })}
-                    />
-                    <FormField
-                      field={{ label: "Instagram" }}
-                      value={draft.instagram}
-                      onChange={(value) =>
-                        setDraft({ ...draft, instagram: value })
-                      }
-                    />
-                    <FormField
-                      field={{ label: "Sitio web" }}
-                      value={draft.website}
-                      onChange={(value) =>
-                        setDraft({ ...draft, website: value })
-                      }
-                    />
-                    <FormField
-                      field={{ label: "URL HTTPS de una foto propia o autorizada" }}
-                      value={draft.imageUrl || ""}
-                      onChange={(value) => setDraft({ ...draft, imageUrl: value })}
-                    />
-                  </>
-                )}
-              </div>
-              {user.role !== "ATHLETE" && (
-                <>
-                  <LocationPicker
-                    latitude={draft.latitude}
-                    longitude={draft.longitude}
-                    onChoose={({ lat, lng }) =>
-                      setDraft({ ...draft, latitude: lat, longitude: lng })
-                    }
-                  />
-                  <FormField
-                    field={{ label: "Frase principal" }}
-                    value={draft.headline}
-                    onChange={(value) =>
-                      setDraft({ ...draft, headline: value })
-                    }
-                  />
-                  <FormField
-                    field={{ label: "Descripción", type: "textarea" }}
-                    value={draft.description}
-                    onChange={(value) =>
-                      setDraft({ ...draft, description: value })
-                    }
-                  />
-                </>
-              )}
-              {error && (
-                <div className="feedback error" role="alert">
-                  {error}
-                </div>
-              )}
-              <button className="button button-primary" disabled={loading}>
-                {loading ? "Guardando..." : "Guardar cambios"}{" "}
-                <Check size={18} />
-              </button>
-            </form>
-          </section>
-        )}
+        {edit && <ProfileEditModal
+          user={user}
+          profile={profile}
+          onClose={() => setEdit(false)}
+          onProfileChange={(nextProfile) => onUpdate({ ...user, profile: nextProfile })}
+          onSaved={(nextProfile) => {
+            onUpdate({ ...user, profile: nextProfile });
+            setEdit(false);
+            setSuccess(user.role === "ATHLETE" ? "Tus cambios se guardaron." : "Tus cambios se guardaron. El perfil quedó pendiente de revisión.");
+          }}
+        />}
       </div>
     </main>
   );

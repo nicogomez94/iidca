@@ -69,6 +69,7 @@ const contactLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 5, standardH
 const importLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Demasiadas cargas. Probá en unos minutos." } });
 const accountProfileInclude = {
   verificationRequests: { orderBy: { createdAt: "desc" }, take: 1 },
+  profilePhotos: { orderBy: { createdAt: "asc" } },
   facilities: {
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     include: { photos: { orderBy: { createdAt: "asc" } } },
@@ -97,6 +98,22 @@ function validationError(message) {
 }
 
 const facilityPhotoUpload = multer({
+  storage: multer.diskStorage({
+    destination: uploadDir,
+    filename: (_req, file, callback) => {
+      const extensions = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp" };
+      callback(null, `${Date.now()}-${crypto.randomBytes(12).toString("hex")}${extensions[file.mimetype] || ""}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, callback) => {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.mimetype))
+      return callback(validationError("La foto debe ser JPG, PNG o WebP."));
+    callback(null, true);
+  },
+});
+
+const profilePhotoUpload = multer({
   storage: multer.diskStorage({
     destination: uploadDir,
     filename: (_req, file, callback) => {
@@ -455,6 +472,81 @@ app.patch("/api/me/profile", auth, async (req, res, next) => {
   }
 });
 
+app.post("/api/me/profile-photos", auth, profilePhotoUpload.single("photo"), async (req, res, next) => {
+  try {
+    const profile = activeProfile(req.user);
+    if (!profile) {
+      if (req.file) await fs.promises.unlink(req.file.path).catch(() => {});
+      return res.status(404).json({ error: "No tenés un perfil editable." });
+    }
+    if (!req.file) throw validationError("Elegí una foto para subir.");
+    const count = await prisma.profilePhoto.count({ where: { profileId: profile.id } });
+    if (count >= 8) {
+      await fs.promises.unlink(req.file.path).catch(() => {});
+      throw validationError("Podés guardar hasta 8 fotos en tu perfil.");
+    }
+    const url = `/uploads/${req.file.filename}`;
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.profilePhoto.create({ data: { profileId: profile.id, url } });
+        if (!profile.imageUrl)
+          await tx.profile.update({ where: { id: profile.id }, data: { imageUrl: url, imageIllustrative: false } });
+      });
+    } catch (error) {
+      await fs.promises.unlink(req.file.path).catch(() => {});
+      throw error;
+    }
+    await audit(req.user.id, "PROFILE_PHOTO_ADDED", profile.id, {});
+    res.status(201).json({ profile: await accountProfile(profile.id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/me/profile-photos/:id/cover", auth, async (req, res, next) => {
+  try {
+    const profile = activeProfile(req.user);
+    const photo = profile
+      ? await prisma.profilePhoto.findFirst({ where: { id: req.params.id, profileId: profile.id } })
+      : null;
+    if (!photo) return res.status(404).json({ error: "Foto no encontrada." });
+    await prisma.profile.update({
+      where: { id: profile.id },
+      data: { imageUrl: photo.url, imageIllustrative: false, imageCredit: null, imageSourceUrl: null },
+    });
+    await audit(req.user.id, "PROFILE_PHOTO_COVER", profile.id, { photoId: photo.id });
+    res.json({ profile: await accountProfile(profile.id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/me/profile-photos/:id", auth, async (req, res, next) => {
+  try {
+    const profile = activeProfile(req.user);
+    const photo = profile
+      ? await prisma.profilePhoto.findFirst({ where: { id: req.params.id, profileId: profile.id } })
+      : null;
+    if (!photo) return res.status(404).json({ error: "Foto no encontrada." });
+    await prisma.$transaction(async (tx) => {
+      await tx.profilePhoto.delete({ where: { id: photo.id } });
+      if (profile.imageUrl === photo.url) {
+        const replacement = await tx.profilePhoto.findFirst({
+          where: { profileId: profile.id, id: { not: photo.id } },
+          orderBy: { createdAt: "asc" },
+        });
+        await tx.profile.update({ where: { id: profile.id }, data: { imageUrl: replacement?.url || null } });
+      }
+    });
+    if (photo.url.startsWith("/uploads/"))
+      await fs.promises.unlink(path.join(uploadDir, path.basename(photo.url))).catch(() => {});
+    await audit(req.user.id, "PROFILE_PHOTO_DELETED", profile.id, { photoId: photo.id });
+    res.json({ profile: await accountProfile(profile.id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/api/me/verification-request", claimLimiter, auth, async (req, res, next) => {
   try {
     const profile = ownedClubProfile(req);
@@ -669,6 +761,7 @@ app.get("/api/profiles/:id", async (req, res, next) => {
     const profile = await prisma.profile.findUnique({
       where: { id: req.params.id },
       include: {
+        profilePhotos: { orderBy: { createdAt: "asc" } },
         facilities: {
           orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
           include: { photos: { orderBy: { createdAt: "asc" } } },

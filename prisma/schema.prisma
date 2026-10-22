@@ -93,12 +93,23 @@ model Profile {
   claims               ClaimRequest[]
   verificationRequests ClubVerificationRequest[]
   facilities           ClubFacility[]
+  profilePhotos        ProfilePhoto[]
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
 
   @@index([status, category])
   @@index([city])
   @@index([sport])
+}
+
+model ProfilePhoto {
+  id        String   @id @default(cuid())
+  profileId String
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  url       String
+  createdAt DateTime @default(now())
+
+  @@index([profileId, createdAt])
 }
 
 model ClubFacility {
