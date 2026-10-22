@@ -74,6 +74,60 @@ const hasSearchCriteria = (filters) => Boolean(
   filters.sport?.trim() || filters.location?.trim() || filters.category ||
   (filters.lat !== "" && filters.lng !== ""),
 );
+const normalizeDirectoryText = (value = "") => String(value)
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLocaleLowerCase("es")
+  .trim();
+const profileSports = (profile) => [...new Set([profile.sport, ...(profile.sports || [])].filter(Boolean))];
+const disciplineDefinitions = [
+  ["Fútbol", /futbol|futsal|fut-sal/],
+  ["Básquet", /basquet|basket/],
+  ["Vóley", /voley|volley|voleibol/],
+  ["Natación", /natacion|natatorio|aquagym|aquafitness|aquamoving|pileta libre|nado sincronizado|waterpolo/],
+  ["Tenis de mesa", /tenis de mesa|ping pong/],
+  ["Tenis", /\btenis\b(?! de mesa)/],
+  ["Hockey", /hockey/],
+  ["Rugby", /rugby/],
+  ["Hándball", /handball|balonmano/],
+  ["Atletismo", /atletismo|running|maraton|aerobismo/],
+  ["Boxeo", /boxeo|boxing|kick boxing/],
+  ["Patín", /patin|patinaje/],
+  ["Gimnasia", /gimnasia|acrobacia|aerobica|localizada|stretching|flexibilidad/],
+  ["Yoga", /yoga/],
+  ["Pilates", /pilates/],
+  ["Artes marciales", /artes marciales|taekwondo|karate|judo|yudo|aikido|kung fu|muay thai|sipalki|defensa personal|capoeira|tai chi|jiu jitsu|kendo|full contact|lucha|krav maga|kra magal/],
+  ["Pádel", /padel/],
+  ["Ajedrez", /ajedrez/],
+  ["Bochas", /bochas/],
+  ["Pelota paleta", /pelota paleta/],
+  ["Musculación", /musculacion|pesas|entrenamiento funcional|fisicoculturismo|fitness|body pump|\bfuncional\b/],
+  ["Danza", /danza|baile|tango|salsa|folklore|merengue|hip hop|bachata|zumba|reggaeton|flamenco|ritmos latinos/],
+  ["Béisbol", /beisbol|baseball/],
+  ["Golf", /golf/],
+  ["Esgrima", /esgrima/],
+  ["Arquería", /arqueria|tiro con arco/],
+  ["Pesca deportiva", /pesca/],
+  ["Bowling", /bowling|bolos/],
+  ["Billar", /billar/],
+  ["Buceo", /buceo/],
+  ["Equitación", /equitacion|hipismo|volteo ecuestre/],
+  ["Escalada", /escalada|boulder|palestra/],
+  ["Ciclismo", /ciclismo|bicicleta|indoor bike|indoor cycling/],
+  ["Cestoball", /cestoball/],
+  ["Squash", /squash/],
+  ["Bádminton", /badminton/],
+  ["Tiro deportivo", /\btiro\b/],
+  ["Náutica", /nautica|remo|vela/],
+  ["Softbol", /softbol/],
+  ["Boccia", /bocchia|boccia/],
+];
+const disciplinesForProfile = (profile) => {
+  const activities = profileSports(profile).map(normalizeDirectoryText);
+  return disciplineDefinitions
+    .filter(([, pattern]) => activities.some((activity) => pattern.test(activity)))
+    .map(([name]) => name);
+};
 
 function roleIcon(role, size = 22) {
   const props = { size, strokeWidth: 1.8 };
@@ -187,6 +241,12 @@ function Header({ view, onNavigate, onAuth, user, onLogout }) {
             onClick={() => go("explore")}
           >
             Explorar
+          </button>
+          <button className={view === "clubs" ? "active" : ""} onClick={() => go("clubs")}>
+            Clubes
+          </button>
+          <button className={view === "sports" ? "active" : ""} onClick={() => go("sports")}>
+            Deportes
           </button>
           <button onClick={() => go("home", "como-funciona")}>
             Cómo funciona
@@ -808,9 +868,9 @@ function ProfileCard({ profile, onOpen }) {
     <article
       className={`directory-card role-${profile.category.toLowerCase()}`}
     >
-      <div className="card-photo">
+      <button type="button" className="card-photo" onClick={() => onOpen(profile)} aria-label={`Ampliar ficha de ${profile.name}`}>
         <img src={profile.imageUrl || "/images/sports/running.jpg"} alt={profile.imageIllustrative || !profile.imageUrl ? `Actividad deportiva de ${profile.name}` : `Sede de ${profile.name}`} loading="lazy" />
-      </div>
+      </button>
       <div className="card-top">
         <div className="card-icon">{roleIcon(profile.category, 25)}</div>
         <span className="card-category">{categoryLabel(profile.category)}</span>
@@ -819,7 +879,7 @@ function ProfileCard({ profile, onOpen }) {
         </span>
       </div>
       <div className="card-body">
-        <h3>{profile.name}</h3>
+        <h3><button type="button" className="card-title-button" onClick={() => onOpen(profile)}>{profile.name}</button></h3>
         <p>
           {profile.headline ||
             profile.description ||
@@ -840,7 +900,7 @@ function ProfileCard({ profile, onOpen }) {
         </span>
         <button
           onClick={() => onOpen(profile)}
-          aria-label={`Ver perfil de ${profile.name}`}
+          aria-label={`Ampliar ficha de ${profile.name}`}
         >
           <ArrowUpRight size={21} />
         </button>
@@ -1156,6 +1216,143 @@ function IdleDirectory({ onLocate, locating, geoError }) {
         <MapPin size={17} /> El mapa mostrará resultados cuando inicies una búsqueda.
       </div>
     </div>
+  );
+}
+
+function DirectoryPageIntro({ label, title, accent, description }) {
+  return (
+    <section className="browse-intro">
+      <div className="container browse-intro-inner">
+        <div>
+          <div className="eyebrow eyebrow-blue"><span className="eyebrow-dot" /> {label}</div>
+          <h1>{title} <em>{accent}</em></h1>
+          <p>{description}</p>
+        </div>
+        <div className="browse-intro-mark" aria-hidden="true">IIDCA<span>SOCIAL CLUB</span></div>
+      </div>
+    </section>
+  );
+}
+
+function DirectoryResults({ profiles, loading, error, emptyTitle, emptyText, onOpen }) {
+  const [limit, setLimit] = useState(24);
+  useEffect(() => setLimit(24), [profiles]);
+  if (loading) return <p className="browse-feedback" role="status">Cargando fichas...</p>;
+  if (error) return <div className="feedback error" role="alert">{error}</div>;
+  if (!profiles.length) return (
+    <div className="empty-state browse-empty">
+      <Search size={30} />
+      <h2>{emptyTitle}</h2>
+      <p>{emptyText}</p>
+    </div>
+  );
+  return (
+    <>
+      <div className="directory-grid browse-grid">
+        {profiles.slice(0, limit).map((profile) => (
+          <ProfileCard key={profile.id} profile={profile} onOpen={onOpen} />
+        ))}
+      </div>
+      {profiles.length > limit && (
+        <button className="button button-outline browse-more" type="button" onClick={() => setLimit(limit + 24)}>
+          Ver más clubes y espacios <ArrowDownRight size={18} />
+        </button>
+      )}
+    </>
+  );
+}
+
+function ClubsPage({ profiles, loading, error, onOpen, onNavigate }) {
+  const [query, setQuery] = useState("");
+  const [sport, setSport] = useState("");
+  const [location, setLocation] = useState("");
+  const [order, setOrder] = useState("name");
+  const clubs = useMemo(() => profiles.filter((profile) => profile.category === "CLUB"), [profiles]);
+  const sports = useMemo(() => [...new Set(clubs.flatMap(disciplinesForProfile))].sort((a, b) => a.localeCompare(b, "es")), [clubs]);
+  const locations = useMemo(() => [...new Set(clubs.map((profile) => profile.neighborhood || profile.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es")), [clubs]);
+  const visibleClubs = useMemo(() => clubs
+    .filter((profile) => !query || normalizeDirectoryText([profile.name, profile.address].join(" ")).includes(normalizeDirectoryText(query)))
+    .filter((profile) => !sport || disciplinesForProfile(profile).includes(sport))
+    .filter((profile) => !location || (profile.neighborhood || profile.city) === location)
+    .sort((a, b) => order === "name" ? a.name.localeCompare(b.name, "es") : (a.neighborhood || a.city).localeCompare(b.neighborhood || b.city, "es")),
+  [clubs, query, sport, location, order]);
+  const hasFilters = Boolean(query || sport || location || order !== "name");
+  return (
+    <main className="browse-page">
+      <DirectoryPageIntro label="DIRECTORIO DE CLUBES" title="Encontrá un club" accent="para vos." description="Buscá por nombre, disciplina o barrio y conocé los espacios de la comunidad." />
+      <section className="container browse-content" aria-label="Listado de clubes">
+        <div className="browse-filter-panel">
+          <label className="browse-search-field">
+            <span>Buscar club</span>
+            <div><Search size={19} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nombre o dirección" /></div>
+          </label>
+          <label><span>Deporte</span><select value={sport} onChange={(event) => setSport(event.target.value)}><option value="">Todos los deportes</option>{sports.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+          <label><span>Barrio o ciudad</span><select value={location} onChange={(event) => setLocation(event.target.value)}><option value="">Todas las ubicaciones</option>{locations.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+          <label><span>Ordenar</span><select value={order} onChange={(event) => setOrder(event.target.value)}><option value="name">Nombre A–Z</option><option value="location">Ubicación A–Z</option></select></label>
+        </div>
+        <div className="browse-results-heading">
+          <div><span>CLUBES Y ESPACIOS</span><h2>{loading ? "Buscando clubes..." : `${visibleClubs.length} ${visibleClubs.length === 1 ? "club" : "clubes"}`}</h2></div>
+          <div className="browse-heading-actions">
+            {hasFilters && <button type="button" onClick={() => { setQuery(""); setSport(""); setLocation(""); setOrder("name"); }}><X size={16} /> Limpiar filtros</button>}
+            <button type="button" onClick={() => onNavigate("sports")}>Ver deportes <ArrowUpRight size={17} /></button>
+          </div>
+        </div>
+        <DirectoryResults profiles={visibleClubs} loading={loading} error={error} emptyTitle={hasFilters ? "No encontramos clubes con esos filtros." : "Todavía no hay clubes publicados."} emptyText={hasFilters ? "Probá otro nombre, deporte o barrio." : "Volvé pronto para descubrir nuevos espacios."} onOpen={onOpen} />
+      </section>
+    </main>
+  );
+}
+
+function SportsPage({ profiles, loading, error, onOpen, onNavigate }) {
+  const [query, setQuery] = useState("");
+  const [selectedSport, setSelectedSport] = useState("");
+  const [location, setLocation] = useState("");
+  const sports = useMemo(() => {
+    const options = new Map();
+    profiles.forEach((profile) => disciplinesForProfile(profile).forEach((name) => {
+      const key = normalizeDirectoryText(name);
+      const current = options.get(key);
+      options.set(key, { name: current?.name || name, count: (current?.count || 0) + 1 });
+    }));
+    return [...options.entries()].map(([key, value]) => ({ key, ...value })).sort((a, b) => a.name.localeCompare(b.name, "es"));
+  }, [profiles]);
+  const matchingSports = sports.filter((item) => item.key.includes(normalizeDirectoryText(query)));
+  const selected = sports.find((item) => item.key === selectedSport);
+  const sportProfiles = useMemo(() => profiles.filter((profile) => disciplinesForProfile(profile).some((item) => normalizeDirectoryText(item) === selectedSport)), [profiles, selectedSport]);
+  const locations = useMemo(() => [...new Set(sportProfiles.map((profile) => profile.neighborhood || profile.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es")), [sportProfiles]);
+  const visibleProfiles = useMemo(() => sportProfiles.filter((profile) => !location || (profile.neighborhood || profile.city) === location), [sportProfiles, location]);
+  return (
+    <main className="browse-page">
+      <DirectoryPageIntro label="DISCIPLINAS IIDCA" title="Cada deporte abre" accent="un camino." description="Elegí una disciplina y descubrí los clubes y espacios donde podés practicarla." />
+      <section className="container browse-content" aria-label="Deportes disponibles">
+        <div className="browse-sports-heading">
+          <div><span>EXPLORÁ POR DISCIPLINA</span><h2>{loading ? "Cargando deportes..." : `${sports.length} ${sports.length === 1 ? "deporte disponible" : "deportes disponibles"}`}</h2></div>
+          <label className="browse-sport-search"><Search size={18} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar un deporte" aria-label="Buscar un deporte" /></label>
+        </div>
+        {error && <div className="feedback error" role="alert">{error}</div>}
+        {!loading && !error && !matchingSports.length && <div className="empty-state browse-empty"><h2>No encontramos esa disciplina.</h2><p>Probá con otro nombre.</p></div>}
+        <div className="browse-sports-grid">
+          {matchingSports.map((item) => (
+            <button key={item.key} className={`browse-sport-card ${selectedSport === item.key ? "is-selected" : ""}`} type="button" onClick={() => { setSelectedSport(item.key); setLocation(""); document.getElementById("sport-results")?.scrollIntoView({ behavior: "smooth", block: "start" }); }} aria-pressed={selectedSport === item.key}>
+              <span className="browse-sport-icon"><Volleyball size={22} strokeWidth={1.7} /></span>
+              <strong>{item.name}</strong>
+              <small>{item.count} {item.count === 1 ? "espacio" : "espacios"}</small>
+              <ArrowUpRight size={20} className="browse-sport-arrow" />
+            </button>
+          ))}
+        </div>
+        <div className="browse-sport-results" id="sport-results">
+          <div className="browse-results-heading">
+            <div><span>DONDE PRACTICAR</span><h2>{selected ? selected.name : "Elegí un deporte"}</h2><p>{selected ? `${visibleProfiles.length} ${visibleProfiles.length === 1 ? "espacio disponible" : "espacios disponibles"}` : "Seleccioná una disciplina para ver sus clubes y espacios."}</p></div>
+            <div className="browse-heading-actions">
+              {selected && <label className="browse-location-select"><span>Ubicación</span><select value={location} onChange={(event) => setLocation(event.target.value)}><option value="">Todas</option>{locations.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>}
+              <button type="button" onClick={() => onNavigate("clubs")}>Todos los clubes <ArrowUpRight size={17} /></button>
+            </div>
+          </div>
+          {selected && <DirectoryResults profiles={visibleProfiles} loading={loading} error={error} emptyTitle="No hay espacios en esta ubicación." emptyText="Probá con otra zona o elegí todas las ubicaciones." onOpen={onOpen} />}
+        </div>
+      </section>
+    </main>
   );
 }
 
@@ -1495,7 +1692,7 @@ function DetailModal({ profile, onClose, user, onAuth, onNavigate }) {
 
 function ClubProfilePage({ profile, loading, error, onNavigate }) {
   if (loading) return <main className="club-profile-page"><div className="container empty-state"><p>Cargando perfil del club...</p></div></main>;
-  if (error || !profile || profile.category !== "CLUB") return <main className="club-profile-page"><div className="container empty-state"><Building2 size={34} /><h1>No encontramos este club.</h1><p>{error || "La ficha no está disponible."}</p><button className="button button-primary" onClick={() => onNavigate("explore")}>Volver al directorio</button></div></main>;
+  if (error || !profile || profile.category !== "CLUB") return <main className="club-profile-page"><div className="container empty-state"><Building2 size={34} /><h1>No encontramos este club.</h1><p>{error || "La ficha no está disponible."}</p><button className="button button-primary" onClick={() => onNavigate("clubs")}>Volver a clubes</button></div></main>;
   const phone = profile.phone?.replace(/[^\d+]/g, "");
   const facilities = profile.facilities || [];
   const details = [
@@ -1509,7 +1706,7 @@ function ClubProfilePage({ profile, loading, error, onNavigate }) {
         <img src={profile.imageUrl || facilities[0]?.photos?.[0]?.url || "/images/sports/football.jpg"} alt={`Actividad e instalaciones de ${profile.name}`} />
         <div className="club-profile-overlay" />
         <div className="container club-profile-hero-content">
-          <button className="club-profile-back" onClick={() => onNavigate("explore")}><ArrowLeft size={18} /> Volver al directorio</button>
+          <button className="club-profile-back" onClick={() => onNavigate("clubs")}><ArrowLeft size={18} /> Volver a clubes</button>
           <div className={`club-profile-badge ${profile.verification === "VERIFIED" ? "is-verified" : ""}`}>
             {profile.verification === "VERIFIED" ? <BadgeCheck size={17} /> : <CircleHelp size={17} />}
             {profile.verification === "VERIFIED" ? "Club verificado" : "Instalaciones aún sin verificar"}
@@ -3000,6 +3197,8 @@ function Footer({ onNavigate, onAuth }) {
           <button onClick={() => onNavigate("explore")}>
             Directorio deportivo
           </button>
+          <button onClick={() => onNavigate("clubs")}>Clubes</button>
+          <button onClick={() => onNavigate("sports")}>Deportes</button>
           <button onClick={() => onNavigate("home", "como-funciona")}>
             Cómo funciona
           </button>
@@ -3037,7 +3236,7 @@ function Footer({ onNavigate, onAuth }) {
 
 export default function App() {
   const routeFromHash = () =>
-    (window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/")) ? "admin" : window.location.pathname.startsWith("/clubes/") ? "club" : window.location.pathname.startsWith("/novedades/") ? "article" : window.location.pathname === "/novedades" ? "news" : ({
+    (window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/")) ? "admin" : window.location.pathname.startsWith("/clubes/") ? "club" : window.location.pathname === "/clubes" ? "clubs" : window.location.pathname === "/deportes" ? "sports" : window.location.pathname.startsWith("/novedades/") ? "article" : window.location.pathname === "/novedades" ? "news" : ({
       "#explorar": "explore",
       "#mi-espacio": "profile",
     })[window.location.hash] || "home";
@@ -3048,6 +3247,9 @@ export default function App() {
   const [profiles, setProfiles] = useState([]);
   const [directoryLoading, setDirectoryLoading] = useState(false);
   const [directoryError, setDirectoryError] = useState("");
+  const [browseProfiles, setBrowseProfiles] = useState([]);
+  const [browseLoading, setBrowseLoading] = useState(false);
+  const [browseError, setBrowseError] = useState("");
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [articles, setArticles] = useState([]);
   const [newsLoading, setNewsLoading] = useState(true);
@@ -3087,6 +3289,17 @@ export default function App() {
     return () => { cancelled = true; };
   }, [filters]);
   useEffect(() => {
+    if (!["clubs", "sports"].includes(view)) return;
+    let cancelled = false;
+    setBrowseLoading(true);
+    setBrowseError("");
+    api("/profiles")
+      .then((data) => { if (!cancelled) setBrowseProfiles(data.profiles); })
+      .catch((issue) => { if (!cancelled) setBrowseError(issue.message); })
+      .finally(() => { if (!cancelled) setBrowseLoading(false); });
+    return () => { cancelled = true; };
+  }, [view]);
+  useEffect(() => {
     if (!["home", "news", "article"].includes(view)) return;
     setNewsLoading(true);
     api("/news").then((data) => { setArticles(data.articles); setNewsError(""); }).catch((issue) => setNewsError(issue.message)).finally(() => setNewsLoading(false));
@@ -3120,7 +3333,7 @@ export default function App() {
       explore: "explorar",
       profile: "mi-espacio",
     };
-    window.history.pushState(null, "", next === "admin" ? "/admin" : next === "news" ? "/novedades" : next === "article" ? `/novedades/${encodeURIComponent(anchor)}` : next === "club" ? `/clubes/${encodeURIComponent(anchor)}` : next === "home" ? "/" : `/#${hashes[next]}`);
+    window.history.pushState(null, "", next === "admin" ? "/admin" : next === "clubs" ? "/clubes" : next === "sports" ? "/deportes" : next === "news" ? "/novedades" : next === "article" ? `/novedades/${encodeURIComponent(anchor)}` : next === "club" ? `/clubes/${encodeURIComponent(anchor)}` : next === "home" ? "/" : `/#${hashes[next]}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (anchor && next === "home")
       window.setTimeout(
@@ -3164,6 +3377,8 @@ export default function App() {
       {view === "news" && <NewsPage articles={articles} loading={newsLoading} error={newsError} onNavigate={navigate} />}
       {view === "article" && <NewsArticle article={articles.find((item) => item.slug === decodeURIComponent(window.location.pathname.split("/")[2] || ""))} loading={newsLoading} onNavigate={navigate} />}
       {view === "club" && <ClubProfilePage profile={clubProfile} loading={clubLoading} error={clubError} onNavigate={navigate} />}
+      {view === "clubs" && <ClubsPage profiles={browseProfiles} loading={browseLoading} error={browseError} onOpen={setSelectedProfile} onNavigate={navigate} />}
+      {view === "sports" && <SportsPage profiles={browseProfiles} loading={browseLoading} error={browseError} onOpen={setSelectedProfile} onNavigate={navigate} />}
       {view === "explore" && (
         <Explore
           filters={filters}

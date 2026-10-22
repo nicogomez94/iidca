@@ -6,6 +6,8 @@ Aplicación responsive para acercar personas a oportunidades deportivas. Su tono
 
 - Inicio con fotografías de personas practicando deporte, transiciones respetuosas de la preferencia de movimiento reducido, tres historias de muestra y un formulario de contacto.
 - Directorio con búsqueda por deporte, ubicación y categoría, vista de listado y Google Maps, geolocalización opcional y fichas con actividades, dirección, fuente y estado de verificación.
+- Página `/clubes` con listado completo, búsqueda por nombre o dirección, filtros de disciplina y ubicación, ordenamiento y acceso a las fichas ampliadas.
+- Página `/deportes` con disciplinas agrupadas a partir de las actividades publicadas; al elegir una, muestra los espacios asociados y permite filtrar por ubicación.
 - Padrón inicial de 310 clubes reales obtenido de [Buenos Aires Data · Clubes](https://data.buenosaires.gob.ar/es_AR/dataset/clubes). La importación es repetible, registra procedencia y fecha, y evita duplicados por identificador de fuente o nombre y dirección.
 - Imágenes de sedes reales para clubes destacados y fotografías del deporte correspondiente para el resto. [Créditos y licencias](public/creditos-fotos.html) se generan con `npm run build` a partir de `data/image-credits.json`.
 - Registro e ingreso de deportistas, clubes, profesionales, federaciones y marcas. Los perfiles de deportistas son privados. Los perfiles públicos nuevos requieren aprobación.
