@@ -57,6 +57,7 @@ if ! grep -q 'location /uploads/' "$nginx_site"; then
 ' "$nginx_site"
 fi
 nginx -t
+systemctl reload nginx
 systemctl restart iidca-social-club.service
 for attempt in 1 2 3 4 5 6 7 8 9 10; do
   if curl --fail --silent http://127.0.0.1:3013/api/health >/dev/null; then
