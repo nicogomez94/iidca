@@ -36,6 +36,7 @@ import {
   Menu,
   Navigation,
   Plus,
+  Phone,
   Search,
   ShieldCheck,
   SlidersHorizontal,
@@ -59,6 +60,7 @@ import {
   createRegistrationDefaults,
   testingMode,
 } from "./debugDefaults.js";
+import { fieldIsVisible, hasValue, publicRoleFields, requiredMissing, roleDocuments } from "../shared/profileFields.js";
 
 const logo = "/logo-iidca.png";
 const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
@@ -128,6 +130,37 @@ const disciplinesForProfile = (profile) => {
     .filter(([, pattern]) => activities.some((activity) => pattern.test(activity)))
     .map(([name]) => name);
 };
+
+function profileCompletion(profile, role) {
+  const details = profile?.details || {};
+  const checks = [
+    { label: role === "ATHLETE" || role === "PROFESSIONAL" ? "Nombre y apellido" : "Nombre de la organización", value: profile?.name },
+    { label: "Ciudad", value: profile?.city },
+    { label: "Deporte o actividad principal", value: profile?.sport || profile?.sports?.length },
+    ...((roleFields[role] || []).filter((field) => field.required && fieldIsVisible(field, details)).map((field) => ({ label: field.label, value: details[field.name] }))),
+  ];
+  if (role !== "ATHLETE") checks.push(
+    { label: "Descripción", value: profile?.description },
+    { label: "Dato de contacto público", value: profile?.email || profile?.phone || profile?.website },
+  );
+  if (role === "CLUB") checks.push({ label: "Instalaciones", value: profile?.facilities?.length });
+  const missing = checks.filter((item) => !hasValue(item.value));
+  return { percentage: Math.round(((checks.length - missing.length) / Math.max(checks.length, 1)) * 100), missing };
+}
+
+function normalizeLegacyDetails(role, value) {
+  const details = { ...(value || {}) };
+  if (role === "ATHLETE" && details.searchGoal && !details.searchGoals) details.searchGoals = [details.searchGoal];
+  if (role === "PROFESSIONAL") {
+    if (details.specialty && !details.specialties) details.specialties = [details.specialty];
+    if (typeof details.mode === "string") details.mode = details.mode === "Ambos" ? ["Presencial", "Online"] : [details.mode];
+  }
+  if (role === "SPONSOR") {
+    if (typeof details.support === "string") details.support = [details.support];
+    if (typeof details.supportType === "string") details.supportType = [details.supportType];
+  }
+  return details;
+}
 
 function roleIcon(role, size = 22) {
   const props = { size, strokeWidth: 1.8 };
@@ -1484,6 +1517,15 @@ function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
   );
 }
 
+function DetailValue({ value }) {
+  if (Array.isArray(value)) {
+    if (value.every((item) => typeof item !== "object")) return <span>{value.join(", ")}</span>;
+    return <div className="detail-nested-list">{value.map((item, index) => <div key={index}>{Object.entries(item).filter(([, nested]) => hasValue(nested)).map(([key, nested]) => <span key={key}><b>{key === "name" ? "Nombre" : key === "city" ? "Ciudad" : key === "address" ? "Dirección" : key === "contact" ? "Contacto" : key === "acceptsSocial" ? "Práctica social" : key}:</b> {String(nested)}</span>)}</div>)}</div>;
+  }
+  if (value && typeof value === "object") return <div className="detail-nested-list">{Object.entries(value).filter(([, nested]) => hasValue(nested)).map(([key, nested]) => <span key={key}><b>{key === "name" ? "Nombre" : key === "type" ? "Tipo" : key === "date" ? "Fecha" : key === "city" ? "Ciudad" : key === "level" ? "Nivel" : key === "openRegistration" ? "Inscripción abierta" : key === "cost" ? "Costo" : key === "link" ? "Enlace" : key}:</b> {key === "link" && /^https?:\/\//.test(String(nested)) ? <a href={nested} target="_blank" rel="noopener noreferrer">Ver información</a> : String(nested)}</span>)}</div>;
+  return <span>{String(value)}</span>;
+}
+
 function DetailModal({ profile, onClose, user, onAuth, onNavigate }) {
   const [claimOpen, setClaimOpen] = useState(false);
   const [evidence, setEvidence] = useState(testingMode ? "Solicitud de prueba: represento a este club y quiero verificar cómo funciona la revisión de fichas en IIDCA." : "");
@@ -1491,24 +1533,7 @@ function DetailModal({ profile, onClose, user, onAuth, onNavigate }) {
   const [claimBusy, setClaimBusy] = useState(false);
   if (!profile) return null;
   const phone = profile.phone?.replace(/[^\d+]/g, "");
-  const detailLabels = {
-    levels: "Niveles",
-    schedule: "Días y horarios",
-    facilities: "Infraestructura",
-    ages: "Edades admitidas",
-    profession: "Profesión",
-    mode: "Modalidad",
-    specialty: "Especialidad",
-    education: "Formación",
-    experience: "Años de experiencia",
-    region: "Región",
-    founded: "Año de fundación",
-    socialPractice: "Práctica social",
-    beginners: "Principiantes",
-    sector: "Rubro",
-    support: "Interés",
-    supportType: "Tipo de apoyo",
-  };
+  const detailFields = Object.fromEntries(publicRoleFields(profile.category).filter((field) => fieldIsVisible(field, profile.details || {})).map((field) => [field.name, field]));
   const submitClaim = async (event) => {
     event.preventDefault();
     setClaimBusy(true);
@@ -1582,11 +1607,11 @@ function DetailModal({ profile, onClose, user, onAuth, onNavigate }) {
           {Object.values(profile.details || {}).some(Boolean) && (
             <div className="detail-facts">
               {Object.entries(profile.details)
-                .filter(([, value]) => value)
+                .filter(([key, value]) => hasValue(value) && detailFields[key])
                 .map(([key, value]) => (
                   <div key={key}>
-                    <strong>{detailLabels[key] || key}</strong>
-                    <span>{String(value)}</span>
+                    <strong>{detailFields[key]?.label || key}</strong>
+                    <DetailValue value={value} />
                   </div>
                 ))}
             </div>
@@ -1638,6 +1663,9 @@ function DetailModal({ profile, onClose, user, onAuth, onNavigate }) {
               >
                 <Mail size={18} /> Escribir por email
               </a>
+            )}
+            {phone && !profile.isDemo && (
+              <a className="button button-outline" href={`tel:${phone}`}><Phone size={18} /> Llamar</a>
             )}
             {phone && !profile.isDemo && (
               <a
@@ -1695,11 +1723,7 @@ function ClubProfilePage({ profile, loading, error, onNavigate }) {
   if (error || !profile || profile.category !== "CLUB") return <main className="club-profile-page"><div className="container empty-state"><Building2 size={34} /><h1>No encontramos este club.</h1><p>{error || "La ficha no está disponible."}</p><button className="button button-primary" onClick={() => onNavigate("clubs")}>Volver a clubes</button></div></main>;
   const phone = profile.phone?.replace(/[^\d+]/g, "");
   const facilities = profile.facilities || [];
-  const details = [
-    ["Niveles", profile.details?.levels],
-    ["Días y horarios", profile.details?.schedule],
-    ["Edades admitidas", profile.details?.ages],
-  ].filter(([, value]) => value);
+  const details = publicRoleFields("CLUB").map((field) => [field.label, profile.details?.[field.name]]).filter(([, value]) => hasValue(value));
   return (
     <main className="club-profile-page">
       <section className="club-profile-hero">
@@ -1724,7 +1748,7 @@ function ClubProfilePage({ profile, loading, error, onNavigate }) {
             <h2>Un lugar para <em>hacer deporte.</em></h2>
             <p>{profile.description || "Este club forma parte del directorio deportivo de IIDCA Social Club."}</p>
             {profile.sports?.length > 0 && <div className="sport-tags club-profile-sports">{profile.sports.map((sport) => <span key={sport}>{sport}</span>)}</div>}
-            {details.length > 0 && <div className="club-profile-facts">{details.map(([label, value]) => <div key={label}><strong>{label}</strong><span>{value}</span></div>)}</div>}
+            {details.length > 0 && <div className="club-profile-facts">{details.map(([label, value]) => <div key={label}><strong>{label}</strong><DetailValue value={value} /></div>)}</div>}
           </section>
 
           <section className="club-profile-section" id="instalaciones">
@@ -1754,6 +1778,7 @@ function ClubProfilePage({ profile, loading, error, onNavigate }) {
             <p>Consultá horarios, actividades disponibles y requisitos directamente con el club.</p>
             {profile.email && <a className="button button-primary full-width" href={`mailto:${profile.email}`}><Mail size={18} /> Escribir por email</a>}
             {phone && <a className="button button-orange full-width" href={`https://wa.me/${phone.replace("+", "")}`} target="_blank" rel="noopener noreferrer">Contactar por WhatsApp</a>}
+            {phone && <a className="club-contact-link" href={`tel:${phone}`}><Phone size={17} /> Llamar por teléfono</a>}
             {profile.website && <a className="club-contact-link" href={profile.website.startsWith("http") ? profile.website : `https://${profile.website}`} target="_blank" rel="noopener noreferrer"><ExternalLink size={17} /> Sitio web</a>}
             {profile.instagram && <a className="club-contact-link" href={`https://instagram.com/${profile.instagram.replace(/^@/, "")}`} target="_blank" rel="noopener noreferrer"><Sparkles size={17} /> {profile.instagram}</a>}
           </div>
@@ -1765,15 +1790,46 @@ function ClubProfilePage({ profile, loading, error, onNavigate }) {
 }
 
 function FormField({ field, value, onChange }) {
+  const fieldValue = value ?? (field.type === "checkboxes" || field.type === "tags" || field.type === "club-list" ? [] : "");
+  if (field.type === "checkboxes") return (
+    <fieldset className="form-field form-options">
+      <legend>{field.label}{field.required && <b> *</b>}</legend>
+      <div className="form-option-grid">{field.options.map((option) => {
+        const checked = Array.isArray(fieldValue) && fieldValue.includes(option);
+        return <label key={option}><input type="checkbox" checked={checked} onChange={() => onChange(checked ? fieldValue.filter((item) => item !== option) : [...fieldValue, option])} /> <span>{option}</span></label>;
+      })}</div>
+    </fieldset>
+  );
+  if (field.type === "consent") return (
+    <label className="checkbox-line form-field-wide">
+      <input type="checkbox" checked={fieldValue === true} onChange={(event) => onChange(event.target.checked)} required={field.required} />
+      <span>{field.label}{field.required && <b> *</b>}</span>
+    </label>
+  );
+  if (field.type === "club-list") {
+    const clubs = Array.isArray(fieldValue) && fieldValue.length ? fieldValue : [{ name: "", city: "", address: "", contact: "", acceptsSocial: "" }];
+    const updateClub = (index, key, nextValue) => onChange(clubs.map((club, itemIndex) => itemIndex === index ? { ...club, [key]: nextValue } : club));
+    return <fieldset className="form-field form-field-wide repeater-field"><legend>{field.label}{field.required && <b> *</b>}</legend>{clubs.map((club, index) => <div className="repeater-card" key={index}>
+      <strong>Club {index + 1}</strong>
+      <input placeholder="Nombre" required={field.required} value={club.name || ""} onChange={(event) => updateClub(index, "name", event.target.value)} />
+      <input placeholder="Ciudad" value={club.city || ""} onChange={(event) => updateClub(index, "city", event.target.value)} />
+      <input placeholder="Dirección" value={club.address || ""} onChange={(event) => updateClub(index, "address", event.target.value)} />
+      <input placeholder="Contacto" value={club.contact || ""} onChange={(event) => updateClub(index, "contact", event.target.value)} />
+      <select value={club.acceptsSocial || ""} onChange={(event) => updateClub(index, "acceptsSocial", event.target.value)}><option value="">¿Acepta práctica social?</option><option>Sí</option><option>No</option></select>
+      <button type="button" className="facility-add-button" disabled={clubs.length === 1} onClick={() => onChange(clubs.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={15} /> Quitar</button>
+    </div>)}<button type="button" className="facility-add-button" onClick={() => onChange([...clubs, { name: "", city: "", address: "", contact: "", acceptsSocial: "" }])}><Plus size={16} /> Agregar club afiliado</button></fieldset>;
+  }
+  if (field.type === "group") {
+    const group = fieldValue && typeof fieldValue === "object" && !Array.isArray(fieldValue) ? fieldValue : {};
+    return <fieldset className="form-field form-field-wide group-field"><legend>{field.label}</legend><div className="form-grid">{field.fields.map((child) => <FormField key={child.name} field={child} value={group[child.name]} onChange={(nextValue) => onChange({ ...group, [child.name]: nextValue })} />)}</div></fieldset>;
+  }
+  const renderedValue = field.type === "tags" && Array.isArray(fieldValue) ? fieldValue.join(", ") : fieldValue;
   return (
-    <label className="form-field">
-      <span>
-        {field.label}
-        {field.required && <b> *</b>}
-      </span>
+    <label className={`form-field ${field.type === "textarea" ? "form-field-wide" : ""}`}>
+      <span>{field.label}{field.required && <b> *</b>}</span>
       {field.type === "select" ? (
         <select
-          value={value || ""}
+          value={renderedValue || ""}
           onChange={(event) => onChange(event.target.value)}
           required={field.required}
         >
@@ -1786,24 +1842,35 @@ function FormField({ field, value, onChange }) {
         </select>
       ) : field.type === "textarea" ? (
         <textarea
-          value={value || ""}
+          value={renderedValue || ""}
           onChange={(event) => onChange(event.target.value)}
           placeholder={field.placeholder || ""}
           required={field.required}
           rows={3}
+          maxLength={field.maxLength}
         />
       ) : (
         <input
-          type={field.type || "text"}
+          type={field.type === "tags" ? "text" : field.type || "text"}
           min={field.min}
-          value={value || ""}
-          onChange={(event) => onChange(event.target.value)}
+          value={renderedValue || ""}
+          onChange={(event) => onChange(field.type === "tags" ? event.target.value.split(",").map((item) => item.trim()).filter(Boolean) : event.target.value)}
           placeholder={field.placeholder || ""}
           required={field.required}
+          maxLength={field.maxLength}
         />
       )}
     </label>
   );
+}
+
+function ProfileDocuments({ role, details, documents = [], files = {}, onFiles, onDelete }) {
+  const configured = (roleDocuments[role] || []).filter((item) => fieldIsVisible(item, details) || documents.some((document) => document.kind === item.key));
+  if (!configured.length) return null;
+  return <fieldset className="document-fields"><legend><Upload size={18} /> Documentación adjunta</legend><p>PDF, DOC, DOCX, JPG, PNG o WebP · hasta 8 MB. Los archivos no se publican en la ficha.</p>{configured.map((item) => {
+    const existing = documents.find((document) => document.kind === item.key);
+    return <div className="document-row" key={item.key}><label><span>{item.label}</span><input type="file" accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp" onChange={(event) => onFiles?.({ ...files, [item.key]: event.target.files?.[0] || null })} /></label>{existing && <div><a href={existing.url} target="_blank" rel="noopener noreferrer"><Download size={15} /> {existing.originalName}</a>{onDelete && <button type="button" onClick={() => onDelete(existing)}><Trash2 size={15} /> Quitar</button>}</div>}</div>;
+  })}</fieldset>;
 }
 
 function FacilityDeclaration({ facilities, onChange }) {
@@ -1844,7 +1911,9 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
   );
   const [clubFacilities, setClubFacilities] = useState([]);
   const [accepted, setAccepted] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [publicConsent, setPublicConsent] = useState(false);
+  const [documentFiles, setDocumentFiles] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   if (!mode) return null;
@@ -1887,13 +1956,13 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
         longitude: draft.longitude,
         email: role === "ATHLETE" ? null : draft.contactEmail,
         phone: role === "ATHLETE" ? null : draft.phone,
-        instagram: draft.instagram,
-        website: draft.website,
+        instagram: role === "ATHLETE" ? null : draft.instagram,
+        website: role === "ATHLETE" ? null : draft.website,
         facilities: role === "CLUB" ? clubFacilities : [],
         details: Object.fromEntries(
           roleFields[role].map((field) => [
             field.name,
-            draft[field.name] || "",
+            draft[field.name] ?? "",
           ]),
         ),
       };
@@ -1904,12 +1973,28 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
           password: draft.password,
           role,
           acceptedTerms: accepted,
+          acceptedPrivacy: privacyAccepted,
           publicConsent,
           profile,
         }),
       });
+      let completedUser = data.user;
+      let documentUploadFailed = false;
+      for (const [kind, file] of Object.entries(documentFiles)) {
+        if (!file) continue;
+        try {
+          const formData = new FormData();
+          formData.append("kind", kind);
+          formData.append("document", file);
+          const uploaded = await api("/me/documents", { method: "POST", body: formData });
+          completedUser = { ...completedUser, profile: uploaded.profile };
+        } catch {
+          documentUploadFailed = true;
+        }
+      }
+      if (documentUploadFailed) completedUser = { ...completedUser, registrationNotice: "La cuenta se creó, pero un adjunto no pudo subirse. Podés volver a cargarlo desde Editar mi perfil." };
       if (testingMode) window.sessionStorage.setItem("iidcaTestEmail", draft.email);
-      onSuccess(data.user);
+      onSuccess(completedUser);
     } catch (issue) {
       setError(issue.message);
     } finally {
@@ -2116,7 +2201,7 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
                         onChange={(value) => change("address", value)}
                       />
                     )}
-                    {roleFields[role].map((field) => (
+                    {roleFields[role].filter((field) => fieldIsVisible(field, draft)).map((field) => (
                       <FormField
                         key={field.name}
                         field={field}
@@ -2125,11 +2210,11 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
                       />
                     ))}
                   </div>
+                  <ProfileDocuments role={role} details={draft} files={documentFiles} onFiles={setDocumentFiles} />
                   {role === "CLUB" && (
                     <FacilityDeclaration facilities={clubFacilities.length ? clubFacilities : [""]} onChange={setClubFacilities} />
                   )}
-                  {role !== "ATHLETE" && (
-                    <LocationPicker
+                  <LocationPicker
                       latitude={draft.latitude}
                       longitude={draft.longitude}
                       onChoose={({ lat, lng }) =>
@@ -2140,7 +2225,6 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
                         }))
                       }
                     />
-                  )}
                   {role !== "ATHLETE" && (
                     <>
                       <FormField
@@ -2155,6 +2239,7 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
                         field={{
                           label: "Descripción breve",
                           type: "textarea",
+                          maxLength: role === "FEDERATION" ? 500 : 1200,
                           placeholder:
                             "Contá qué hacés y a quién está dirigido",
                         }}
@@ -2247,10 +2332,11 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
                       onChange={(event) => setAccepted(event.target.checked)}
                       required
                     />{" "}
-                    <span>
-                      Confirmo que soy mayor de 18 años, que la información es
-                      veraz y que mantendré una convivencia respetuosa.
-                    </span>
+                    <span>Acepto los <button type="button" className="inline-link" onClick={() => { onClose(); window.history.pushState(null, "", "/terminos"); window.dispatchEvent(new PopStateEvent("popstate")); }}>Términos y Condiciones</button>.</span>
+                  </label>
+                  <label className="checkbox-line">
+                    <input type="checkbox" checked={privacyAccepted} onChange={(event) => setPrivacyAccepted(event.target.checked)} required />
+                    <span>Acepto la <button type="button" className="inline-link" onClick={() => { onClose(); window.history.pushState(null, "", "/privacidad"); window.dispatchEvent(new PopStateEvent("popstate")); }}>Política de Privacidad</button>.</span>
                   </label>
                   {role !== "ATHLETE" && (
                     <label className="checkbox-line">
@@ -2549,6 +2635,8 @@ function ProfilePhotoLibrary({ profile, role, onChange }) {
 
 function ProfileEditModal({ user, profile, onClose, onSaved, onProfileChange }) {
   const [draft, setDraft] = useState(profile);
+  const [details, setDetails] = useState(() => normalizeLegacyDetails(user.role, profile.details));
+  const [documentFiles, setDocumentFiles] = useState({});
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   useEffect(() => {
@@ -2583,9 +2671,19 @@ function ProfileEditModal({ user, profile, onClose, onSaved, onProfileChange }) 
           phone: draft.phone,
           instagram: draft.instagram,
           website: draft.website,
+          details,
         }),
       });
-      onSaved(data.profile);
+      let nextProfile = data.profile;
+      for (const [kind, file] of Object.entries(documentFiles)) {
+        if (!file) continue;
+        const formData = new FormData();
+        formData.append("kind", kind);
+        formData.append("document", file);
+        const uploaded = await api("/me/documents", { method: "POST", body: formData });
+        nextProfile = uploaded.profile;
+      }
+      onSaved(nextProfile);
     } catch (issue) {
       setError(issue.message);
     } finally {
@@ -2619,8 +2717,25 @@ function ProfileEditModal({ user, profile, onClose, onSaved, onProfileChange }) 
           {user.role !== "ATHLETE" && <>
             <LocationPicker latitude={draft.latitude} longitude={draft.longitude} onChoose={({ lat, lng }) => setDraft({ ...draft, latitude: lat, longitude: lng })} />
             <FormField field={{ label: "Frase principal" }} value={draft.headline} onChange={(value) => setDraft({ ...draft, headline: value })} />
-            <FormField field={{ label: "Descripción", type: "textarea" }} value={draft.description} onChange={(value) => setDraft({ ...draft, description: value })} />
+            <FormField field={{ label: "Descripción", type: "textarea", maxLength: user.role === "FEDERATION" ? 500 : 1200 }} value={draft.description} onChange={(value) => setDraft({ ...draft, description: value })} />
           </>}
+          <div className="profile-editor-form-heading profile-editor-subheading"><div><span className="profile-editor-kicker">DATOS DEL MANIFIESTO</span><h3>Información específica</h3></div><p>Completá los campos que todavía estén pendientes.</p></div>
+          <div className="form-grid">
+            {(roleFields[user.role] || []).filter((field) => fieldIsVisible(field, details)).map((field) => <FormField key={field.name} field={field} value={details[field.name]} onChange={(value) => setDetails((current) => ({ ...current, [field.name]: value }))} />)}
+          </div>
+          <ProfileDocuments
+            role={user.role}
+            details={details}
+            documents={profile.documents || []}
+            files={documentFiles}
+            onFiles={setDocumentFiles}
+            onDelete={async (document) => {
+              try {
+                const data = await api(`/me/documents/${document.id}`, { method: "DELETE" });
+                onProfileChange(data.profile);
+              } catch (issue) { setError(issue.message); }
+            }}
+          />
           {error && <div className="feedback error" role="alert">{error}</div>}
           <footer className="profile-editor-footer"><button type="button" className="button button-ghost" onClick={onClose}>Cancelar</button><button className="button button-primary" disabled={loading}>{loading ? "Guardando..." : "Guardar cambios"} <Check size={18} /></button></footer>
         </form>
@@ -2634,7 +2749,23 @@ function MemberProfile({ user, onUpdate, onExplore }) {
   const profile = user.profile;
   const [edit, setEdit] = useState(false);
   const [success, setSuccess] = useState("");
+  const [nearby, setNearby] = useState([]);
+  const [nearbyLoading, setNearbyLoading] = useState(false);
+  const [selectedNearby, setSelectedNearby] = useState(null);
+  useEffect(() => {
+    if (user.role !== "ATHLETE" || !profile) return;
+    const params = profile.latitude != null && profile.longitude != null
+      ? { lat: profile.latitude, lng: profile.longitude, radius: 15 }
+      : { location: profile.neighborhood || profile.city };
+    const loadCategory = (category) => api(`/profiles?${new URLSearchParams({ ...params, category }).toString()}`).then((data) => data.profiles);
+    setNearbyLoading(true);
+    Promise.all([loadCategory("CLUB"), loadCategory("PROFESSIONAL")])
+      .then(([clubs, professionals]) => setNearby([...clubs, ...professionals].sort((a, b) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999)).slice(0, 6)))
+      .catch(() => setNearby([]))
+      .finally(() => setNearbyLoading(false));
+  }, [profile?.id, profile?.latitude, profile?.longitude, profile?.city, profile?.neighborhood, user.role]);
   if (!profile) return null;
+  const completion = profileCompletion(profile, user.role);
   return (
     <main className="dashboard-page">
       <div className="container dashboard-container">
@@ -2647,6 +2778,7 @@ function MemberProfile({ user, onUpdate, onExplore }) {
             Tu punto de partida para ser parte de una comunidad en movimiento.
           </p>
         </div>
+        {user.registrationNotice && <div className="feedback error" role="status">{user.registrationNotice}</div>}
         <div className="dashboard-grid">
           <section className="dashboard-card profile-summary">
             <div className="profile-summary-top">
@@ -2709,7 +2841,16 @@ function MemberProfile({ user, onUpdate, onExplore }) {
               Explorar directorio <ArrowUpRight size={18} />
             </button>
           </section>
+          <section className="dashboard-card completion-card">
+            <div className="completion-header"><div><span>PERFIL COMPLETADO</span><strong>{completion.percentage}%</strong></div><div className="completion-ring" style={{ "--completion": `${completion.percentage * 3.6}deg` }} aria-label={`${completion.percentage}% completado`} /></div>
+            <div className="completion-track"><span style={{ width: `${completion.percentage}%` }} /></div>
+            {completion.missing.length ? <><p>Te faltan {completion.missing.length} {completion.missing.length === 1 ? "dato" : "datos"} para completar lo esencial:</p><ul>{completion.missing.slice(0, 4).map((item) => <li key={item.label}>{item.label}</li>)}</ul><button className="button button-outline full-width" onClick={() => setEdit(true)}>Completar perfil <ArrowRight size={18} /></button></> : <p><Check size={17} /> Completaste todos los datos esenciales de tu perfil.</p>}
+          </section>
         </div>
+        {user.role === "ATHLETE" && <section className="dashboard-nearby">
+          <div className="section-heading"><div><div className="eyebrow eyebrow-blue">CERCA TUYO</div><h2>Clubes y profesionales para empezar</h2></div><button className="button button-outline" onClick={onExplore}>Ver directorio</button></div>
+          {nearbyLoading ? <p>Cargando opciones cercanas...</p> : nearby.length ? <div className="directory-grid">{nearby.map((item) => <ProfileCard key={item.id} profile={item} onOpen={setSelectedNearby} />)}</div> : <div className="empty-state"><MapPin size={30} /><h3>No encontramos resultados cercanos todavía.</h3><p>Podés editar tu ubicación o ampliar la búsqueda en el directorio.</p><button className="button button-primary" onClick={onExplore}>Buscar por ubicación</button></div>}
+        </section>}
         {user.role === "CLUB" && (
           <FacilityManager
             profile={profile}
@@ -2734,6 +2875,7 @@ function MemberProfile({ user, onUpdate, onExplore }) {
             setSuccess(user.role === "ATHLETE" ? "Tus cambios se guardaron." : "Tus cambios se guardaron. El perfil quedó pendiente de revisión.");
           }}
         />}
+        <DetailModal profile={selectedNearby} onClose={() => setSelectedNearby(null)} user={user} onAuth={() => {}} onNavigate={(next, id) => { setSelectedNearby(null); if (next === "club") window.location.assign(`/clubes/${encodeURIComponent(id)}`); }} />
       </div>
     </main>
   );
@@ -3175,6 +3317,11 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
             <h2>Editar ficha</h2>
             <p>Los cambios quedan registrados en la auditoría.</p>
             {[["name", "Nombre"], ["city", "Ciudad"], ["neighborhood", "Barrio"], ["address", "Dirección"], ["sports", "Deportes separados por comas"], ["website", "Sitio web"], ["imageUrl", "Foto HTTPS"]].map(([key, label]) => <label key={key}>{label}<input value={editing[key] || ""} onChange={(event) => setEditing({ ...editing, [key]: event.target.value })} /></label>)}
+            <div className="admin-edit-details">
+              <h3>Datos específicos</h3>
+              {(roleFields[editing.category] || []).filter((field) => fieldIsVisible(field, editing.details || {})).map((field) => <FormField key={field.name} field={field} value={editing.details?.[field.name]} onChange={(value) => setEditing({ ...editing, details: { ...(editing.details || {}), [field.name]: value } })} />)}
+            </div>
+            {editing.documents?.length > 0 && <div className="admin-document-list"><h3>Documentación privada</h3>{editing.documents.map((document) => <a key={document.id} href={document.url} target="_blank" rel="noopener noreferrer"><Download size={15} /> {document.originalName}</a>)}</div>}
             <button className="button button-primary" disabled={busy === editing.id}>Guardar cambios</button>
           </form>
         </div>}
@@ -3213,6 +3360,8 @@ function Footer({ onNavigate, onAuth }) {
           <button onClick={() => onNavigate("home", "contacto")}>Contacto</button>
           <button onClick={() => onAuth("register")}>Crear un perfil</button>
           <button onClick={() => onAuth("login")}>Ingresar</button>
+          <button onClick={() => onNavigate("terms")}>Términos y condiciones</button>
+          <button onClick={() => onNavigate("privacy")}>Política de privacidad</button>
           <span>Proyecto piloto · Ciudad de Buenos Aires</span>
         </div>
       </div>
@@ -3234,9 +3383,33 @@ function Footer({ onNavigate, onAuth }) {
   );
 }
 
+function LegalPage({ type, onNavigate }) {
+  const privacy = type === "privacy";
+  return <main className="legal-page"><div className="container legal-container">
+    <button className="button button-ghost" onClick={() => onNavigate("home")}><ArrowLeft size={17} /> Volver al inicio</button>
+    <div className="eyebrow eyebrow-blue">INFORMACIÓN LEGAL</div>
+    <h1>{privacy ? "Política de privacidad" : "Términos y condiciones"}</h1>
+    <p className="legal-updated">Última actualización: 26 de octubre de 2026</p>
+    {privacy ? <>
+      <section><h2>1. Qué información recopilamos</h2><p>IIDCA recibe los datos que ingresás al crear o editar una cuenta: identidad, ubicación, intereses deportivos, datos profesionales o institucionales, medios de contacto, fotografías y documentación adjunta. También conservamos datos básicos de sesión y eventos administrativos necesarios para operar el servicio.</p></section>
+      <section><h2>2. Para qué la usamos</h2><p>La usamos para administrar tu cuenta, presentar las fichas autorizadas, habilitar búsquedas por ubicación, revisar publicaciones, prevenir duplicados y responder solicitudes. No vendemos datos personales ni usamos la información para decisiones automatizadas o matching inteligente.</p></section>
+      <section><h2>3. Información pública y privada</h2><p>Los perfiles de deportistas son privados. En perfiles profesionales, clubes, federaciones y sponsors se publican únicamente los datos de ficha y contacto autorizados. Las credenciales, consentimientos y los documentos adjuntos permanecen fuera de las fichas públicas.</p></section>
+      <section><h2>4. Conservación y proveedores</h2><p>Conservamos la información mientras la cuenta esté activa o resulte necesaria para gestionar el servicio y obligaciones aplicables. La aplicación utiliza proveedores de alojamiento, base de datos, mapas y correo que pueden procesar información para prestar esos servicios.</p></section>
+      <section><h2>5. Tus opciones</h2><p>Podés corregir tus datos desde “Mi espacio” y solicitar acceso, actualización o eliminación escribiendo mediante el formulario de contacto. Algunas constancias mínimas pueden conservarse cuando exista una obligación legal o un motivo legítimo de seguridad operativa.</p></section>
+    </> : <>
+      <section><h2>1. Alcance del servicio</h2><p>IIDCA Social Club es un directorio para conectar personas, profesionales y organizaciones deportivas. El MVP no ofrece pagos, reservas, gestión de torneos, crowdfunding, chat interno ni garantiza contrataciones, cupos o resultados.</p></section>
+      <section><h2>2. Registro y contenido</h2><p>Debés tener al menos 18 años para crear una cuenta, brindar información veraz y mantenerla actualizada. Sos responsable del contenido y archivos que publicás y de contar con autorización para compartirlos. IIDCA puede revisar, ocultar o rechazar información incompleta, duplicada, engañosa o contraria a la convivencia de la comunidad.</p></section>
+      <section><h2>3. Fichas y contacto</h2><p>Los perfiles institucionales y profesionales quedan sujetos a revisión. La verificación indica que se completó el proceso descripto en la plataforma, no constituye una recomendación ni garantiza la calidad de servicios de terceros. Los acuerdos y contactos se realizan directamente entre las partes.</p></section>
+      <section><h2>4. Sponsors y aporte a IIDCA</h2><p>Cuando un sponsor acepta una vinculación gestionada bajo esta modalidad, reconoce la cláusula de aporte del 15 % a la Fundación IIDCA sobre el valor acordado, conforme a las condiciones particulares que deberán documentarse entre las partes. El registro del interés no ejecuta cobros ni constituye por sí solo un contrato de sponsoreo.</p></section>
+      <section><h2>5. Uso responsable</h2><p>No está permitido suplantar identidades, cargar material sin derechos, acosar, discriminar, interferir con el servicio ni usar datos de contacto para comunicaciones abusivas. Podemos suspender accesos ante incumplimientos.</p></section>
+      <section><h2>6. Cambios y contacto</h2><p>Podemos actualizar estas condiciones para reflejar cambios del servicio. La versión vigente estará publicada en esta página. Para consultas, usá el formulario de contacto disponible en el sitio.</p></section>
+    </>}
+  </div></main>;
+}
+
 export default function App() {
   const routeFromHash = () =>
-    (window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/")) ? "admin" : window.location.pathname.startsWith("/clubes/") ? "club" : window.location.pathname === "/clubes" ? "clubs" : window.location.pathname === "/deportes" ? "sports" : window.location.pathname.startsWith("/novedades/") ? "article" : window.location.pathname === "/novedades" ? "news" : ({
+    (window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/")) ? "admin" : window.location.pathname === "/terminos" ? "terms" : window.location.pathname === "/privacidad" ? "privacy" : window.location.pathname.startsWith("/clubes/") ? "club" : window.location.pathname === "/clubes" ? "clubs" : window.location.pathname === "/deportes" ? "sports" : window.location.pathname.startsWith("/novedades/") ? "article" : window.location.pathname === "/novedades" ? "news" : ({
       "#explorar": "explore",
       "#mi-espacio": "profile",
     })[window.location.hash] || "home";
@@ -3333,7 +3506,7 @@ export default function App() {
       explore: "explorar",
       profile: "mi-espacio",
     };
-    window.history.pushState(null, "", next === "admin" ? "/admin" : next === "clubs" ? "/clubes" : next === "sports" ? "/deportes" : next === "news" ? "/novedades" : next === "article" ? `/novedades/${encodeURIComponent(anchor)}` : next === "club" ? `/clubes/${encodeURIComponent(anchor)}` : next === "home" ? "/" : `/#${hashes[next]}`);
+    window.history.pushState(null, "", next === "admin" ? "/admin" : next === "terms" ? "/terminos" : next === "privacy" ? "/privacidad" : next === "clubs" ? "/clubes" : next === "sports" ? "/deportes" : next === "news" ? "/novedades" : next === "article" ? `/novedades/${encodeURIComponent(anchor)}` : next === "club" ? `/clubes/${encodeURIComponent(anchor)}` : next === "home" ? "/" : `/#${hashes[next]}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (anchor && next === "home")
       window.setTimeout(
@@ -3379,6 +3552,8 @@ export default function App() {
       {view === "club" && <ClubProfilePage profile={clubProfile} loading={clubLoading} error={clubError} onNavigate={navigate} />}
       {view === "clubs" && <ClubsPage profiles={browseProfiles} loading={browseLoading} error={browseError} onOpen={setSelectedProfile} onNavigate={navigate} />}
       {view === "sports" && <SportsPage profiles={browseProfiles} loading={browseLoading} error={browseError} onOpen={setSelectedProfile} onNavigate={navigate} />}
+      {view === "terms" && <LegalPage type="terms" onNavigate={navigate} />}
+      {view === "privacy" && <LegalPage type="privacy" onNavigate={navigate} />}
       {view === "explore" && (
         <Explore
           filters={filters}

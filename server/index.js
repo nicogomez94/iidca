@@ -14,6 +14,7 @@ import rateLimit from "express-rate-limit";
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 import { buildImportTemplate, importError, parseImportFile, validateImportRow } from "./profileImport.js";
+import { fieldIsVisible, publicRoleFields, requiredMissing, roleDocuments, roleFields } from "../shared/profileFields.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -70,6 +71,7 @@ const importLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardH
 const accountProfileInclude = {
   verificationRequests: { orderBy: { createdAt: "desc" }, take: 1 },
   profilePhotos: { orderBy: { createdAt: "asc" } },
+  documents: { orderBy: { createdAt: "asc" } },
   facilities: {
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     include: { photos: { orderBy: { createdAt: "asc" } } },
@@ -129,6 +131,30 @@ const profilePhotoUpload = multer({
   },
 });
 
+const documentUpload = multer({
+  storage: multer.diskStorage({
+    destination: uploadDir,
+    filename: (_req, file, callback) => {
+      const extensions = {
+        "application/pdf": ".pdf",
+        "application/msword": ".doc",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+      };
+      callback(null, `${Date.now()}-${crypto.randomBytes(12).toString("hex")}${extensions[file.mimetype] || ""}`);
+    },
+  }),
+  limits: { fileSize: 8 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, callback) => {
+    const allowed = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "image/jpeg", "image/png", "image/webp"];
+    if (!allowed.includes(file.mimetype))
+      return callback(validationError("El adjunto debe ser PDF, DOC, DOCX, JPG, PNG o WebP."));
+    callback(null, true);
+  },
+});
+
 function normalizeFacilities(value) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map((item) => cleanText(typeof item === "string" ? item : item?.name, 120)).filter(Boolean))].slice(0, 12);
@@ -159,7 +185,71 @@ async function accountProfile(profileId) {
   return safeProfile(profile, true);
 }
 
-function normalizeProfile(input) {
+function normalizeDetailValue(value, depth = 0) {
+  if (depth > 3) return undefined;
+  if (typeof value === "string") return cleanText(value, 1200);
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value === "boolean") return value;
+  if (Array.isArray(value))
+    return value.slice(0, 30).map((item) => normalizeDetailValue(item, depth + 1)).filter((item) => item !== undefined);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).slice(0, 30).map(([key, item]) => [cleanText(key, 50), normalizeDetailValue(item, depth + 1)]).filter(([, item]) => item !== undefined));
+  }
+  return undefined;
+}
+
+function validateRoleDetails(role, details, { requireAll = false } = {}) {
+  if (!roleFields[role]) return;
+  if (requireAll) {
+    const missing = requiredMissing(role, details);
+    if (missing.length)
+      throw validationError(`Completá los campos obligatorios: ${missing.map((field) => field.label).join(", ")}.`);
+  }
+  for (const field of roleFields[role]) {
+    if (!fieldIsVisible(field, details)) continue;
+    const value = details[field.name];
+    if (field.type === "email" && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value)))
+      throw validationError(`${field.label}: ingresá un email válido.`);
+    if (field.type === "url" && value && !/^https?:\/\/[^\s]+$/i.test(String(value)))
+      throw validationError(`${field.label}: ingresá una dirección web válida.`);
+    if (field.type === "number" && value !== "" && value != null) {
+      const number = Number(value);
+      if (!Number.isFinite(number) || (field.min != null && number < field.min))
+        throw validationError(`${field.label}: ingresá un valor válido.`);
+      details[field.name] = number;
+    }
+    if (field.type === "consent" && requireAll && value !== true)
+      throw validationError(`Debés aceptar: ${field.label}.`);
+    if (field.type === "club-list" && requireAll && (!Array.isArray(value) || !value.some((club) => cleanText(club?.name, 120))))
+      throw validationError(`${field.label}: agregá al menos un club con su nombre.`);
+    if (field.type === "group" && requireAll && value && typeof value === "object") {
+      const missingChildren = (field.fields || []).filter((child) =>
+        child.required && (!Object.hasOwn(value, child.name) || !String(value[child.name] ?? "").trim()),
+      );
+      if (missingChildren.length) throw validationError(`${field.label}: completá ${missingChildren.map((child) => child.label).join(", ")}.`);
+    }
+  }
+  if (role === "ATHLETE" && details.age != null && details.age !== "" && Number(details.age) < 18)
+    throw validationError("La edad, si se informa, debe ser de 18 años o más.");
+}
+
+function normalizeLegacyDetails(role, value) {
+  const details = { ...(value || {}) };
+  if (role === "ATHLETE" && details.searchGoal && !details.searchGoals) details.searchGoals = [details.searchGoal];
+  if (role === "PROFESSIONAL") {
+    if (details.specialty && !details.specialties) details.specialties = [details.specialty];
+    if (typeof details.mode === "string") details.mode = details.mode === "Ambos" ? ["Presencial", "Online"] : [details.mode];
+  }
+  if (role === "SPONSOR") {
+    if (typeof details.support === "string") details.support = [details.support];
+    if (typeof details.supportType === "string") details.supportType = [details.supportType];
+  }
+  delete details.searchGoal;
+  delete details.specialty;
+  return details;
+}
+
+function normalizeProfile(input, role, options = {}) {
   const data = {};
   for (const field of profileFields) {
     if (Object.hasOwn(input, field)) data[field] = input[field];
@@ -224,19 +314,26 @@ function normalizeProfile(input) {
       Array.isArray(data.details)
     )
       data.details = {};
+    data.details = normalizeLegacyDetails(role, data.details);
+    const configuredFields = roleFields[role] || [];
+    const allowedNames = configuredFields.map((field) => field.name);
     const details = {};
-    for (const [key, value] of Object.entries(data.details).slice(0, 30)) {
-      if (
-        typeof value === "string" ||
-        typeof value === "number" ||
-        typeof value === "boolean"
-      ) {
-        details[cleanText(key, 50)] =
-          typeof value === "string" ? cleanText(value, 500) : value;
-      }
+    for (const [key, value] of Object.entries(data.details).slice(0, 80)) {
+      if (allowedNames && !allowedNames.includes(key)) continue;
+      const configuredField = configuredFields.find((field) => field.name === key);
+      if (configuredField && !fieldIsVisible(configuredField, data.details)) continue;
+      const normalized = normalizeDetailValue(value);
+      if (normalized !== undefined) details[cleanText(key, 50)] = normalized;
     }
+    validateRoleDetails(role, details, options);
     data.details = details;
   }
+  if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email))
+    throw validationError("Ingresá un email público válido.");
+  if (data.website && !/^https?:\/\/[^\s]+$/i.test(data.website))
+    throw validationError("Ingresá un sitio web válido, incluyendo http:// o https://.");
+  if (role === "FEDERATION" && data.description && data.description.length > 500)
+    throw validationError("La descripción de la federación puede tener hasta 500 caracteres.");
   return data;
 }
 
@@ -245,22 +342,13 @@ function safeProfile(profile, includePrivate = false, includeSource = false) {
   if (includePrivate)
     publicData.verificationRequestStatus = verificationRequests?.[0]?.status || null;
   if (includeSource) publicData.sourceContact = sourceContact;
+  publicData.details = normalizeLegacyDetails(profile.category, publicData.details);
   if (!includePrivate) {
-    const allowedDetails = {
-      CLUB: ["levels", "schedule", "facilities", "ages"],
-      PROFESSIONAL: [
-        "profession",
-        "mode",
-        "specialty",
-        "education",
-        "experience",
-      ],
-      FEDERATION: ["region", "founded", "socialPractice", "beginners"],
-      SPONSOR: ["sector", "support", "supportType"],
-    };
+    delete publicData.documents;
+    const allowedDetails = publicRoleFields(profile.category).filter((field) => fieldIsVisible(field, publicData.details)).map((field) => field.name);
     publicData.details = Object.fromEntries(
       Object.entries(publicData.details || {}).filter(([key]) =>
-        allowedDetails[profile.category]?.includes(key),
+        allowedDetails.includes(key),
       ),
     );
   }
@@ -356,7 +444,7 @@ app.post("/api/contact", contactLimiter, async (req, res) => {
 
 app.post("/api/auth/register", authLimiter, async (req, res, next) => {
   try {
-    const { email, password, role, acceptedTerms, publicConsent } = req.body;
+    const { email, password, role, acceptedTerms, acceptedPrivacy, publicConsent } = req.body;
     const normalizedEmail = cleanText(email, 200).toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail))
       return res.status(400).json({ error: "Ingresá un email válido." });
@@ -370,33 +458,47 @@ app.post("/api/auth/register", authLimiter, async (req, res, next) => {
       return res
         .status(400)
         .json({
-          error: "Confirmá que sos mayor de 18 años y aceptás las condiciones.",
+          error: "Aceptá los Términos y Condiciones para continuar.",
         });
+    if (!acceptedPrivacy)
+      return res.status(400).json({ error: "Aceptá la Política de Privacidad para continuar." });
     if (publicRoles.includes(role) && !publicConsent)
       return res
         .status(400)
         .json({
           error: "Autorizá la publicación de los datos de contacto del perfil.",
         });
-    const profile = normalizeProfile(req.body.profile || {});
+    const profile = normalizeProfile(req.body.profile || {}, role, { requireAll: true });
     const facilities = normalizeFacilities(req.body.profile?.facilities);
     if (!profile.name || !profile.city)
       return res.status(400).json({ error: "Completá el nombre y la ciudad." });
     if (role === "CLUB" && facilities.length === 0)
       return res.status(400).json({ error: "Declaración de instalaciones: agregá al menos una instalación del club." });
-    if (role === "ATHLETE" && Number(profile.details?.age) < 18)
-      return res
-        .status(400)
-        .json({ error: "El registro requiere ser mayor de 18 años." });
     if (await prisma.user.findUnique({ where: { email: normalizedEmail } }))
       return res
         .status(409)
         .json({ error: "Ya existe una cuenta con ese email." });
+    if (publicRoles.includes(role)) {
+      const duplicate = await prisma.profile.findFirst({
+        where: {
+          category: role,
+          name: { equals: profile.name, mode: "insensitive" },
+          city: { equals: profile.city, mode: "insensitive" },
+        },
+        select: { id: true },
+      });
+      if (duplicate)
+        return res.status(409).json({ error: "Ya existe un perfil con ese nombre y ciudad. Buscalo en el directorio y solicitá administrarlo." });
+    }
+    const acceptedAt = new Date();
     const user = await prisma.user.create({
       data: {
         email: normalizedEmail,
         passwordHash: await bcrypt.hash(demoMode ? crypto.randomBytes(32).toString("hex") : password, 12),
         role,
+        termsAcceptedAt: acceptedAt,
+        privacyAcceptedAt: acceptedAt,
+        publicConsentAt: publicConsent ? acceptedAt : null,
         profile: {
           create: {
             ...profile,
@@ -455,7 +557,7 @@ app.patch("/api/me/profile", auth, async (req, res, next) => {
     const ownedProfile = activeProfile(req.user);
     if (!ownedProfile)
       return res.status(404).json({ error: "No tenés un perfil editable." });
-    const data = normalizeProfile(req.body);
+    const data = normalizeProfile(req.body, req.user.role, { requireAll: true });
     if (req.user.role === "ATHLETE") delete data.email;
     const profile = await prisma.profile.update({
       where: { id: ownedProfile.id },
@@ -541,6 +643,59 @@ app.delete("/api/me/profile-photos/:id", auth, async (req, res, next) => {
     if (photo.url.startsWith("/uploads/"))
       await fs.promises.unlink(path.join(uploadDir, path.basename(photo.url))).catch(() => {});
     await audit(req.user.id, "PROFILE_PHOTO_DELETED", profile.id, { photoId: photo.id });
+    res.json({ profile: await accountProfile(profile.id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/me/documents", auth, documentUpload.single("document"), async (req, res, next) => {
+  try {
+    const profile = activeProfile(req.user);
+    if (!profile) {
+      if (req.file) await fs.promises.unlink(req.file.path).catch(() => {});
+      return res.status(404).json({ error: "No tenés un perfil editable." });
+    }
+    if (!req.file) throw validationError("Elegí un archivo para subir.");
+    const kind = cleanText(req.body.kind, 50);
+    const allowedKinds = (roleDocuments[profile.category] || []).map((document) => document.key);
+    if (!allowedKinds.includes(kind)) {
+      await fs.promises.unlink(req.file.path).catch(() => {});
+      throw validationError("El tipo de documento no corresponde a este perfil.");
+    }
+    const existing = await prisma.profileDocument.findFirst({ where: { profileId: profile.id, kind } });
+    if (existing) {
+      await prisma.profileDocument.delete({ where: { id: existing.id } });
+      if (existing.url.startsWith("/uploads/"))
+        await fs.promises.unlink(path.join(uploadDir, path.basename(existing.url))).catch(() => {});
+    }
+    const document = await prisma.profileDocument.create({
+      data: {
+        profileId: profile.id,
+        kind,
+        originalName: cleanText(req.file.originalname, 200),
+        mimeType: req.file.mimetype,
+        url: `/uploads/${req.file.filename}`,
+      },
+    });
+    await audit(req.user.id, "PROFILE_DOCUMENT_ADDED", profile.id, { kind, documentId: document.id });
+    res.status(201).json({ profile: await accountProfile(profile.id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/me/documents/:id", auth, async (req, res, next) => {
+  try {
+    const profile = activeProfile(req.user);
+    const document = profile
+      ? await prisma.profileDocument.findFirst({ where: { id: req.params.id, profileId: profile.id } })
+      : null;
+    if (!document) return res.status(404).json({ error: "Documento no encontrado." });
+    await prisma.profileDocument.delete({ where: { id: document.id } });
+    if (document.url.startsWith("/uploads/"))
+      await fs.promises.unlink(path.join(uploadDir, path.basename(document.url))).catch(() => {});
+    await audit(req.user.id, "PROFILE_DOCUMENT_DELETED", profile.id, { kind: document.kind, documentId: document.id });
     res.json({ profile: await accountProfile(profile.id) });
   } catch (error) {
     next(error);
@@ -821,7 +976,7 @@ app.get("/api/admin/overview", auth, adminOnly, async (_req, res, next) => {
   try {
     const [users, profiles, categories, claims, verificationRequests] = await Promise.all([
       prisma.user.count(),
-      prisma.profile.findMany({ orderBy: { createdAt: "desc" }, take: 1000, include: { user: { select: { email: true } }, claimedBy: { select: { email: true } } } }),
+      prisma.profile.findMany({ orderBy: { createdAt: "desc" }, take: 1000, include: { user: { select: { email: true } }, claimedBy: { select: { email: true } }, documents: { orderBy: { createdAt: "asc" } } } }),
       prisma.profile.groupBy({ by: ["category"], _count: { id: true } }),
       prisma.claimRequest.findMany({ where: { status: "PENDING" }, orderBy: { createdAt: "asc" }, include: { user: { select: { email: true, profile: { select: { name: true } } } }, profile: { select: { name: true, sourceUrl: true } } } }),
       prisma.clubVerificationRequest.findMany({
@@ -1161,7 +1316,7 @@ app.patch("/api/admin/profile-data/:id", auth, adminOnly, async (req, res, next)
   try {
     const existing = await prisma.profile.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: "Ficha no encontrada." });
-    const data = normalizeProfile(req.body);
+    const data = normalizeProfile(req.body, existing.category, { requireAll: false });
     if (existing.category === "ATHLETE")
       return res.status(403).json({ error: "Los perfiles personales se editan desde la cuenta del titular." });
     const profile = await prisma.profile.update({ where: { id: existing.id }, data });
@@ -1181,9 +1336,9 @@ app.get("/{*path}", (_req, res) =>
 
 app.use((error, _req, res, _next) => {
   if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE")
-    return res.status(413).json({ error: "La foto supera los 5 MB permitidos." });
+    return res.status(413).json({ error: error.field === "document" ? "El documento supera los 8 MB permitidos." : "La foto supera los 5 MB permitidos." });
   if (error instanceof multer.MulterError)
-    return res.status(400).json({ error: "No pudimos procesar la foto." });
+    return res.status(400).json({ error: error.field === "document" ? "No pudimos procesar el documento." : "No pudimos procesar la foto." });
   if (error.status === 413)
     return res.status(413).json({ error: "El archivo supera los 5 MB permitidos." });
   if (error.status === 400)

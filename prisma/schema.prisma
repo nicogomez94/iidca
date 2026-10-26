@@ -41,19 +41,22 @@ enum VerificationRequestStatus {
 }
 
 model User {
-  id               String         @id @default(cuid())
-  email            String         @unique
-  passwordHash     String
-  role             Role
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  profile          Profile?
-  claimedProfile   Profile?       @relation("ClaimedProfile")
-  claims           ClaimRequest[]
-  mfaSecret        String?
-  mfaPendingSecret String?
-  mfaEnabled       Boolean        @default(false)
-  auditEvents      AuditEvent[]
+  id                String         @id @default(cuid())
+  email             String         @unique
+  passwordHash      String
+  role              Role
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  profile           Profile?
+  claimedProfile    Profile?       @relation("ClaimedProfile")
+  claims            ClaimRequest[]
+  mfaSecret         String?
+  mfaPendingSecret  String?
+  mfaEnabled        Boolean        @default(false)
+  auditEvents       AuditEvent[]
+  termsAcceptedAt   DateTime?
+  privacyAcceptedAt DateTime?
+  publicConsentAt   DateTime?
 }
 
 model Profile {
@@ -94,12 +97,26 @@ model Profile {
   verificationRequests ClubVerificationRequest[]
   facilities           ClubFacility[]
   profilePhotos        ProfilePhoto[]
+  documents            ProfileDocument[]
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
 
   @@index([status, category])
   @@index([city])
   @@index([sport])
+}
+
+model ProfileDocument {
+  id           String   @id @default(cuid())
+  profileId    String
+  profile      Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  kind         String
+  originalName String
+  mimeType     String
+  url          String
+  createdAt    DateTime @default(now())
+
+  @@index([profileId, kind])
 }
 
 model ProfilePhoto {

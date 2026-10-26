@@ -5822,3 +5822,85 @@ em {
     min-height: 69px;
   }
 }
+/* Formularios de perfil y cierre del MVP */
+.form-field-wide,
+.document-fields,
+.repeater-field,
+.group-field,
+.profile-editor-subheading,
+.admin-edit-details,
+.admin-document-list { grid-column: 1 / -1; }
+
+.form-options,
+.document-fields,
+.repeater-field,
+.group-field {
+  border: 1px solid var(--line, #d9ded8);
+  border-radius: 14px;
+  padding: 16px;
+  min-width: 0;
+}
+
+.form-options legend,
+.document-fields legend,
+.repeater-field legend,
+.group-field legend { font-weight: 700; padding: 0 6px; }
+.form-option-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 16px; margin-top: 8px; }
+.form-option-grid label { display: flex; align-items: flex-start; gap: 8px; font-size: .9rem; }
+.form-option-grid input { width: auto; margin-top: 3px; }
+.repeater-card { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 14px; margin: 10px 0; border-radius: 12px; background: #f7f8f5; }
+.repeater-card strong { grid-column: 1 / -1; }
+.repeater-card button { justify-self: start; }
+.document-fields { margin: 18px 0; }
+.document-fields > p { margin: 0 0 12px; color: var(--muted, #66736a); font-size: .88rem; }
+.document-row { display: flex; justify-content: space-between; gap: 14px; align-items: end; padding: 10px 0; border-top: 1px solid #e5e8e3; }
+.document-row label { display: grid; gap: 6px; min-width: 0; }
+.document-row label span { font-weight: 650; }
+.document-row > div { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.document-row a, .document-row button, .admin-document-list a { display: inline-flex; align-items: center; gap: 6px; }
+.document-row button { border: 0; background: transparent; color: #9b342b; cursor: pointer; }
+.inline-link { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
+.detail-nested-list { display: grid; gap: 6px; }
+.detail-nested-list > div { display: grid; gap: 3px; padding: 7px 0; border-bottom: 1px solid #e7e9e4; }
+.detail-nested-list span { display: block; }
+
+.completion-card { align-self: stretch; }
+.completion-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.completion-header > div:first-child { display: grid; gap: 2px; }
+.completion-header span { font-size: .72rem; letter-spacing: .11em; font-weight: 750; color: var(--muted, #66736a); }
+.completion-header strong { font-size: 2rem; }
+.completion-ring { width: 52px; height: 52px; border-radius: 50%; background: conic-gradient(#f06f38 var(--completion), #e5e9e4 0); position: relative; flex: 0 0 auto; }
+.completion-ring::after { content: ""; position: absolute; inset: 7px; background: white; border-radius: 50%; }
+.completion-track { height: 7px; border-radius: 999px; background: #e5e9e4; overflow: hidden; margin: 17px 0; }
+.completion-track span { display: block; height: 100%; background: #f06f38; border-radius: inherit; }
+.completion-card ul { margin: 8px 0 18px; padding-left: 20px; }
+.dashboard-nearby { margin-top: 34px; }
+.dashboard-nearby .section-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin-bottom: 18px; }
+.dashboard-nearby .section-heading h2 { margin: 6px 0 0; }
+
+.legal-page { padding: 74px 0 100px; background: #f7f7f3; min-height: 70vh; }
+.legal-container { max-width: 850px; }
+.legal-container > .button { margin-bottom: 34px; }
+.legal-container h1 { font-size: clamp(2.25rem, 6vw, 4.4rem); margin: 8px 0 6px; }
+.legal-updated { color: var(--muted, #66736a); margin-bottom: 38px; }
+.legal-container section { padding: 22px 0; border-top: 1px solid #dfe3dd; }
+.legal-container section h2 { font-size: 1.25rem; margin: 0 0 10px; }
+.legal-container section p { line-height: 1.75; margin: 0; }
+.admin-edit-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.admin-edit-details h3, .admin-document-list h3 { grid-column: 1 / -1; margin-bottom: 0; }
+.admin-document-list { display: grid; gap: 8px; }
+
+@media (max-width: 760px) {
+  .form-option-grid,
+  .repeater-card,
+  .admin-edit-details { grid-template-columns: 1fr; }
+  .document-row,
+  .dashboard-nearby .section-heading { align-items: stretch; flex-direction: column; }
+  .auth-modal,
+  .profile-editor-modal,
+  .admin-edit-modal { width: calc(100vw - 20px); max-height: calc(100dvh - 20px); overflow-y: auto; }
+  .form-grid { grid-template-columns: 1fr; }
+  .detail-actions { display: grid; grid-template-columns: 1fr; }
+  .detail-actions .button { width: 100%; justify-content: center; }
+  .legal-page { padding: 42px 0 70px; }
+}
