@@ -273,7 +273,7 @@ function Header({ view, onNavigate, onAuth, user, onLogout }) {
             className={view === "explore" || view === "club" ? "active" : ""}
             onClick={() => go("explore")}
           >
-            Explorar
+            Mapa
           </button>
           <button className={view === "clubs" ? "active" : ""} onClick={() => go("clubs")}>
             Clubes
@@ -288,7 +288,7 @@ function Header({ view, onNavigate, onAuth, user, onLogout }) {
             Nuestro propósito
           </button>
           <button className={view === "news" || view === "article" ? "active" : ""} onClick={() => go("news")}>
-            Novedades
+            Noticias
           </button>
           <div className="mobile-nav-actions">
             {user ? (
@@ -565,7 +565,7 @@ function Home({ onSearch, onNavigate, onAuth, articles }) {
                 className="button button-primary"
                 onClick={() => onNavigate("explore")}
               >
-                Explorar opciones <ArrowUpRight size={19} />
+                Ver mapa <ArrowUpRight size={19} />
               </button>
               <button
                 className="button button-outline"
@@ -615,7 +615,7 @@ function Home({ onSearch, onNavigate, onAuth, articles }) {
               <div className="eyebrow eyebrow-blue">UN POCO DE INSPIRACIÓN</div>
               <h2 id="news-title">Historias para <em>poner el cuerpo</em> en movimiento.</h2>
             </div>
-            <p>Ideas y novedades para encontrar nuevas formas de moverte cerca de casa.</p>
+            <p>Ideas y noticias para encontrar nuevas formas de moverte cerca de casa.</p>
           </div>
           <div className="news-grid">
             {articles.slice(0, 3).map((story, index) => (
@@ -628,13 +628,13 @@ function Home({ onSearch, onNavigate, onAuth, articles }) {
                   <h3>{story.title}</h3>
                   <p>{story.excerpt}</p>
                   <button onClick={() => onNavigate("article", story.slug)}>
-                    Leer novedad <ArrowUpRight size={18} />
+                    Leer noticia <ArrowUpRight size={18} />
                   </button>
                 </div>
               </article>
             ))}
           </div>
-          <button className="news-all-link" onClick={() => onNavigate("news")}>Ver todas las novedades <ArrowRight size={18} /></button>
+          <button className="news-all-link" onClick={() => onNavigate("news")}>Ver todas las noticias <ArrowRight size={18} /></button>
         </div>
       </section>
 
@@ -666,7 +666,7 @@ function Home({ onSearch, onNavigate, onAuth, articles }) {
                 empezar desde cero o seguir creciendo.
               </p>
               <button onClick={() => onNavigate("explore")}>
-                Explorar directorio <ArrowUpRight size={17} />
+                Ver mapa <ArrowUpRight size={17} />
               </button>
             </article>
             <article className="path-card path-card-two" data-reveal>
@@ -773,17 +773,17 @@ function NewsPage({ articles, loading, error, onNavigate }) {
     <section className="news-page-intro">
       <div className="container news-page-intro-inner">
         <div>
-          <div className="eyebrow eyebrow-blue"><span className="eyebrow-dot" /> NOVEDADES IIDCA</div>
+          <div className="eyebrow eyebrow-blue"><span className="eyebrow-dot" /> NOTICIAS IIDCA</div>
           <h1>Historias para seguir <em>en movimiento.</em></h1>
           <p>Ideas, experiencias y actividades para acercarte al deporte.</p>
         </div>
-        <div className="news-intro-mark" aria-hidden="true"><span>IIDCA</span><strong>NOVEDADES</strong></div>
+        <div className="news-intro-mark" aria-hidden="true"><span>IIDCA</span><strong>NOTICIAS</strong></div>
       </div>
     </section>
-    <section className="container news-browser" aria-label="Todas las novedades">
+    <section className="container news-browser" aria-label="Todas las noticias">
       <div className="news-filter-panel">
         <label className="news-filter-search">
-          <span>Buscar en novedades</span>
+          <span>Buscar en noticias</span>
           <div><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Título, tema o palabra clave" /></div>
         </label>
         <label>
@@ -803,12 +803,12 @@ function NewsPage({ articles, loading, error, onNavigate }) {
         {(query || category || order !== "recent") && <button className="news-clear-filters" type="button" onClick={clearFilters}><X size={16} /> Limpiar</button>}
       </div>
       <div className="news-results-heading">
-        <div><span>ARCHIVO DE HISTORIAS</span><h2>{visibleArticles.length} {visibleArticles.length === 1 ? "novedad" : "novedades"}</h2></div>
+        <div><span>ARCHIVO DE HISTORIAS</span><h2>{visibleArticles.length} {visibleArticles.length === 1 ? "noticia" : "noticias"}</h2></div>
         <p>Noticias, ideas y experiencias de la comunidad deportiva.</p>
       </div>
-      {loading && <p>Cargando novedades...</p>}
+      {loading && <p>Cargando noticias...</p>}
       {error && <p className="feedback error" role="alert">{error}</p>}
-      {!loading && !error && !articles.length && <div className="empty-state"><h2>Pronto habrá novedades.</h2><p>Volvé a visitarnos para conocer nuevas historias.</p></div>}
+      {!loading && !error && !articles.length && <div className="empty-state"><h2>Pronto habrá noticias.</h2><p>Volvé a visitarnos para conocer nuevas historias.</p></div>}
       {!loading && !error && articles.length > 0 && !visibleArticles.length && <div className="empty-state"><Search size={30} /><h2>No encontramos coincidencias.</h2><p>Probá con otra palabra o quitá los filtros.</p><button className="button button-outline" onClick={clearFilters}>Ver todas</button></div>}
       <div className="news-page-grid">
         {visibleArticles.map((article) => <article className="news-list-card" key={article.id}>
@@ -817,7 +817,7 @@ function NewsPage({ articles, loading, error, onNavigate }) {
             <div className="news-card-meta"><span className="news-category">{article.category}</span><time dateTime={article.publishedAt || article.createdAt}>{new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(article.publishedAt || article.createdAt))}</time></div>
             <h2>{article.title}</h2>
             <p>{article.excerpt}</p>
-            <button className="news-read-link" onClick={() => onNavigate("article", article.slug)}>Leer novedad <ArrowUpRight size={18} /></button>
+            <button className="news-read-link" onClick={() => onNavigate("article", article.slug)}>Leer noticia <ArrowUpRight size={18} /></button>
           </div>
         </article>)}
       </div>
@@ -826,13 +826,13 @@ function NewsPage({ articles, loading, error, onNavigate }) {
 }
 
 function NewsArticle({ article, loading, onNavigate }) {
-  if (loading) return <main className="news-article-page container"><p>Cargando novedad...</p></main>;
-  if (!article) return <main className="news-article-page container"><div className="empty-state"><h1>No encontramos esa novedad.</h1><button className="button button-primary" onClick={() => onNavigate("news")}>Ver novedades</button></div></main>;
+  if (loading) return <main className="news-article-page container"><p>Cargando noticia...</p></main>;
+  if (!article) return <main className="news-article-page container"><div className="empty-state"><h1>No encontramos esa noticia.</h1><button className="button button-primary" onClick={() => onNavigate("news")}>Ver noticias</button></div></main>;
   return <main className="news-article-page">
-    <div className="container"><button className="news-back" onClick={() => onNavigate("news")}><ArrowLeft size={18} /> Todas las novedades</button>
+    <div className="container"><button className="news-back" onClick={() => onNavigate("news")}><ArrowLeft size={18} /> Todas las noticias</button>
       <div className="news-article-heading"><span className="news-category">{article.category}</span><h1>{article.title}</h1><p>{article.excerpt}</p></div>
       <img className="news-article-image" src={article.imageUrl} alt={article.imageAlt} />
-      <div className="news-article-body">{article.body.split(/\n\s*\n/).filter(Boolean).map((paragraph, index) => <p key={index}>{paragraph}</p>)}<button className="button button-primary" onClick={() => onNavigate("explore")}>Explorar opciones <ArrowUpRight size={18} /></button></div>
+      <div className="news-article-body">{article.body.split(/\n\s*\n/).filter(Boolean).map((paragraph, index) => <p key={index}>{paragraph}</p>)}<button className="button button-primary" onClick={() => onNavigate("explore")}>Ver mapa <ArrowUpRight size={18} /></button></div>
     </div>
   </main>;
 }
@@ -1436,7 +1436,7 @@ function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
               <h2>Directorio deportivo</h2>
               <span>
                 {!active
-                  ? "Elegí cómo empezar a explorar"
+                  ? "Elegí cómo usar el mapa"
                   : loading
                   ? "Buscando..."
                   : `${profiles.length} ${profiles.length === 1 ? "opción encontrada" : "opciones encontradas"}${filters.lat && filters.lng ? ` a ${currentRadius} km de vos` : ""}`}
@@ -2834,11 +2834,11 @@ function MemberProfile({ user, onUpdate, onExplore }) {
               {user.role === "ATHLETE"
                 ? "Explorá clubes, profesionales y federaciones. Filtrá por deporte o barrio y encontrá un espacio para empezar."
                 : profile.status === "PENDING"
-                  ? "El equipo de IIDCA validará la información antes de mostrarla en el directorio. Mientras tanto, podés completarla o explorar la comunidad."
+                  ? "El equipo de IIDCA validará la información antes de mostrarla en el directorio. Mientras tanto, podés completarla o ver el mapa de la comunidad."
                   : "Tu ficha ya se puede encontrar en el directorio deportivo."}
             </p>
             <button className="button button-orange" onClick={onExplore}>
-              Explorar directorio <ArrowUpRight size={18} />
+              Ver mapa <ArrowUpRight size={18} />
             </button>
           </section>
           <section className="dashboard-card completion-card">
@@ -2912,10 +2912,10 @@ function AdminNews() {
     finally { setBusy(false); }
   };
   return <div className="admin-news-layout">
-    <div className="admin-news-toolbar"><span>{articles.length} novedades · {articles.filter((article) => article.published).length} publicadas</span><button className="button button-primary" onClick={() => setEditing({ ...emptyNewsDraft })}>Nueva novedad <ArrowRight size={17} /></button></div>
+    <div className="admin-news-toolbar"><span>{articles.length} noticias · {articles.filter((article) => article.published).length} publicadas</span><button className="button button-primary" onClick={() => setEditing({ ...emptyNewsDraft })}>Nueva noticia <ArrowRight size={17} /></button></div>
     {error && <p className="feedback error" role="alert">{error}</p>}
     {editing && <form className="dashboard-card admin-news-form" onSubmit={save}>
-      <div className="admin-list-heading"><h2>{editing.id ? "Editar novedad" : "Nueva novedad"}</h2><button type="button" className="admin-news-cancel" onClick={() => setEditing(null)}>Cancelar</button></div>
+      <div className="admin-list-heading"><h2>{editing.id ? "Editar noticia" : "Nueva noticia"}</h2><button type="button" className="admin-news-cancel" onClick={() => setEditing(null)}>Cancelar</button></div>
       <div className="admin-news-form-grid">
         <label className="admin-news-wide">Título<input required maxLength={140} value={editing.title} onChange={(event) => setEditing({ ...editing, title: event.target.value })} /></label>
         <label>Categoría<input required maxLength={55} value={editing.category} onChange={(event) => setEditing({ ...editing, category: event.target.value })} placeholder="Ej. VIDA ACTIVA" /></label>
@@ -2925,7 +2925,7 @@ function AdminNews() {
         <label className="admin-news-wide">Resumen<input required maxLength={320} value={editing.excerpt} onChange={(event) => setEditing({ ...editing, excerpt: event.target.value })} /></label>
         <label className="admin-news-wide">Contenido<textarea required rows={8} value={editing.body} onChange={(event) => setEditing({ ...editing, body: event.target.value })} placeholder="Separá los párrafos con una línea en blanco." /></label>
       </div>
-      <div className="admin-news-form-bottom"><label><input type="checkbox" checked={editing.published} onChange={(event) => setEditing({ ...editing, published: event.target.checked })} /> Publicar en el sitio</label><button className="button button-primary" disabled={busy}>Guardar novedad</button></div>
+      <div className="admin-news-form-bottom"><label><input type="checkbox" checked={editing.published} onChange={(event) => setEditing({ ...editing, published: event.target.checked })} /> Publicar en el sitio</label><button className="button button-primary" disabled={busy}>Guardar noticia</button></div>
     </form>}
     <div className="admin-news-list">{articles.map((article) => <article className="dashboard-card admin-news-item" key={article.id}>
       <img src={article.imageUrl} alt={article.imageAlt} /><div><span className="news-category">{article.category}</span><h2>{article.title}</h2><p>{article.excerpt}</p><span className={`status-badge ${article.published ? "status-published" : "status-hidden"}`}>{article.published ? "Publicada" : "Borrador"}</span></div>
@@ -3177,7 +3177,7 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
           <button className={activeSection === "reclamos" ? "active" : ""} onClick={() => goToSection("reclamos")}><BadgeCheck size={19} /> Verificaciones <span>{pendingReviews}</span></button>
           <button className={activeSection === "perfiles" ? "active" : ""} onClick={() => goToSection("perfiles")}><Users size={19} /> Perfiles <span>{overview?.profiles.length ?? "—"}</span></button>
           <button className={activeSection === "importador" ? "active" : ""} onClick={() => goToSection("importador")}><Upload size={19} /> Importador</button>
-          <button className={activeSection === "novedades" ? "active" : ""} onClick={() => goToSection("novedades")}><Sparkles size={19} /> Novedades</button>
+          <button className={activeSection === "novedades" ? "active" : ""} onClick={() => goToSection("novedades")}><Sparkles size={19} /> Noticias</button>
         </nav>
         <div className="admin-sidebar-bottom">
           <div className="admin-sidebar-account"><span>{user.email?.slice(0, 1).toUpperCase() || "A"}</span><div><strong>Administración</strong><small>{user.email}</small></div></div>
@@ -3188,7 +3188,7 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
       <div className="admin-main">
         <div className="admin-topbar"><button className="admin-menu-toggle" aria-label="Abrir menú de administración" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)}><Menu size={23} /></button><span>Administración <span>/</span> IIDCA Social Club</span><span className="admin-topbar-status"><i /> Panel activo</span></div>
         <div className="admin-content">
-          <div className="admin-heading"><div><span>PANEL DE GESTIÓN</span><h1>{({ resumen: "Resumen", reclamos: "Verificaciones", perfiles: "Perfiles", importador: "Importador", novedades: "Novedades" })[activeSection]}</h1><p>{({ resumen: "Una mirada rápida a la comunidad.", reclamos: "Revisá solicitudes de verificación y vinculación de clubes.", perfiles: "Administrá las fichas y descargá el padrón con filtros.", importador: "Cargá y actualizá perfiles desde una planilla.", novedades: "Creá y publicá las historias que aparecen en el sitio." })[activeSection]}</p></div><span className="admin-heading-date">{new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long", year: "numeric" }).format(new Date())}</span></div>
+          <div className="admin-heading"><div><span>PANEL DE GESTIÓN</span><h1>{({ resumen: "Resumen", reclamos: "Verificaciones", perfiles: "Perfiles", importador: "Importador", novedades: "Noticias" })[activeSection]}</h1><p>{({ resumen: "Una mirada rápida a la comunidad.", reclamos: "Revisá solicitudes de verificación y vinculación de clubes.", perfiles: "Administrá las fichas y descargá el padrón con filtros.", importador: "Cargá y actualizá perfiles desde una planilla.", novedades: "Creá y publicá las historias que aparecen en el sitio." })[activeSection]}</p></div><span className="admin-heading-date">{new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long", year: "numeric" }).format(new Date())}</span></div>
         {error && (
           <div className="feedback error" role="alert">
             {error}
@@ -3352,7 +3352,7 @@ function Footer({ onNavigate, onAuth }) {
           <button onClick={() => onNavigate("home", "proposito")}>
             Nuestro propósito
           </button>
-          <button onClick={() => onNavigate("news")}>Novedades</button>
+          <button onClick={() => onNavigate("news")}>Noticias</button>
         </div>
         <div className="footer-links">
           <strong>Participá</strong>

@@ -1101,7 +1101,7 @@ function newsInput(input) {
     published: input.published === true,
   };
   if (!article.title || !article.excerpt || !article.body || !article.category || !article.imageUrl || !article.imageAlt)
-    throw validationError("Completá todos los campos de la novedad.");
+    throw validationError("Completá todos los campos de la noticia.");
   if (!/^https:\/\/[^\s]+$/i.test(article.imageUrl) && !/^\/images\/[\w./-]+$/.test(article.imageUrl))
     throw validationError("La foto debe ser una URL HTTPS o una imagen del sitio.");
   return article;
@@ -1117,7 +1117,7 @@ app.get("/api/news", async (_req, res, next) => {
 app.get("/api/news/:slug", async (req, res, next) => {
   try {
     const article = await prisma.newsArticle.findUnique({ where: { slug: req.params.slug } });
-    if (!article?.published) return res.status(404).json({ error: "Novedad no encontrada." });
+    if (!article?.published) return res.status(404).json({ error: "Noticia no encontrada." });
     res.json({ article });
   } catch (error) { next(error); }
 });
@@ -1132,7 +1132,7 @@ app.get("/api/admin/news", auth, adminOnly, async (_req, res, next) => {
 app.post("/api/admin/news", auth, adminOnly, async (req, res, next) => {
   try {
     const data = newsInput(req.body);
-    const slugBase = data.title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 75) || "novedad";
+    const slugBase = data.title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 75) || "noticia";
     const article = await prisma.newsArticle.create({ data: { ...data, slug: `${slugBase}-${crypto.randomBytes(3).toString("hex")}`, publishedAt: data.published ? new Date() : null } });
     await audit(req.user.id, "NEWS_CREATED", article.id, { title: article.title });
     res.status(201).json({ article });
@@ -1142,7 +1142,7 @@ app.post("/api/admin/news", auth, adminOnly, async (req, res, next) => {
 app.patch("/api/admin/news/:id", auth, adminOnly, async (req, res, next) => {
   try {
     const existing = await prisma.newsArticle.findUnique({ where: { id: req.params.id } });
-    if (!existing) return res.status(404).json({ error: "Novedad no encontrada." });
+    if (!existing) return res.status(404).json({ error: "Noticia no encontrada." });
     const data = newsInput(req.body);
     const article = await prisma.newsArticle.update({ where: { id: existing.id }, data: { ...data, publishedAt: data.published ? existing.publishedAt || new Date() : null } });
     await audit(req.user.id, "NEWS_UPDATED", article.id, { published: article.published });
@@ -1153,7 +1153,7 @@ app.patch("/api/admin/news/:id", auth, adminOnly, async (req, res, next) => {
 app.delete("/api/admin/news/:id", auth, adminOnly, async (req, res, next) => {
   try {
     const existing = await prisma.newsArticle.findUnique({ where: { id: req.params.id } });
-    if (!existing) return res.status(404).json({ error: "Novedad no encontrada." });
+    if (!existing) return res.status(404).json({ error: "Noticia no encontrada." });
     await prisma.newsArticle.delete({ where: { id: existing.id } });
     await audit(req.user.id, "NEWS_DELETED", existing.id, { title: existing.title });
     res.json({ ok: true });
