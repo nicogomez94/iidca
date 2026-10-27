@@ -5859,6 +5859,7 @@ em {
 .document-row > div { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .document-row a, .document-row button, .admin-document-list a { display: inline-flex; align-items: center; gap: 6px; }
 .document-row button { border: 0; background: transparent; color: #9b342b; cursor: pointer; }
+.map-location-notice { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; padding: 10px 13px; border-radius: 10px; background: #fff7e7; color: #6c531d; font-size: .9rem; }
 .inline-link { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
 .detail-nested-list { display: grid; gap: 6px; }
 .detail-nested-list > div { display: grid; gap: 3px; padding: 7px 0; border-bottom: 1px solid #e7e9e4; }

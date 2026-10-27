@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   APIProvider,
@@ -1212,46 +1212,6 @@ function LocationPicker({ latitude, longitude, onChoose }) {
   );
 }
 
-function IdleDirectory({ onLocate, locating, geoError }) {
-  return (
-    <div className="map-frame map-idle" aria-label="Mapa sin resultados hasta iniciar una búsqueda">
-      <div className="map-topbar">
-        <div>
-          <span className="map-topbar-kicker">BUSCÁ EN EL MAPA</span>
-          <strong>Tu próximo lugar puede estar cerca.</strong>
-        </div>
-        <button
-          className="map-idle-top-action"
-          type="button"
-          onClick={onLocate}
-          disabled={locating}
-        >
-          <LocateFixed size={18} />
-          {locating ? "Buscando tu ubicación..." : "Encontrar cerca de mi ubicación"}
-        </button>
-      </div>
-      <div className="map-idle-canvas">
-        <div className="map-idle-grid" aria-hidden="true" />
-        <div className="map-idle-content">
-          <span className="map-idle-icon">
-            <LocateFixed size={30} strokeWidth={1.8} />
-          </span>
-          <span className="map-idle-kicker">EMPEZÁ POR VOS</span>
-          <h3>Encontrá deporte cerca tuyo.</h3>
-          <p>Buscamos clubes, profesionales y otras entidades publicadas a 5 km de tu ubicación.</p>
-          <small>Usá el botón naranja o elegí un deporte, ubicación o categoría en el buscador de arriba.</small>
-          {geoError && (
-            <div className="map-idle-error" role="alert">{geoError}</div>
-          )}
-        </div>
-      </div>
-      <div className="map-caption">
-        <MapPin size={17} /> El mapa mostrará resultados cuando inicies una búsqueda.
-      </div>
-    </div>
-  );
-}
-
 function DirectoryPageIntro({ label, title, accent, description }) {
   return (
     <section className="browse-intro">
@@ -1393,6 +1353,7 @@ function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
   const [layout, setLayout] = useState("map");
   const [locating, setLocating] = useState(false);
   const [geoError, setGeoError] = useState("");
+  const attemptedLocation = useRef(false);
   const active = hasSearchCriteria(filters);
   const currentRadius = Number(filters.radius || 5);
   const expandedRadius = currentRadius < 10 ? 10 : currentRadius < 20 ? 20 : null;
@@ -1406,15 +1367,37 @@ function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         setLocating(false);
-        onSearch({ ...defaultFilters, lat: String(coords.latitude), lng: String(coords.longitude), radius: "5" });
+        onSearch({ ...filters, location: "", lat: String(coords.latitude), lng: String(coords.longitude), radius: filters.radius || "5" });
       },
       () => {
         setLocating(false);
-        setGeoError("No pudimos obtener tu ubicación. Permití el acceso en el navegador o buscá por barrio o ciudad arriba.");
+        setGeoError("Mostramos el mapa general. Si querés resultados cercanos, habilitá la ubicación o escribí un barrio o ciudad.");
       },
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 10 * 60 * 1000 },
     );
   };
+  useEffect(() => {
+    if (attemptedLocation.current || filters.lat || filters.lng) return;
+    attemptedLocation.current = true;
+    if (!navigator.geolocation) {
+      setGeoError("Tu navegador no admite ubicación. Mostramos el mapa general y podés buscar por barrio o ciudad.");
+      return;
+    }
+    const requestLocation = () => locateNearby();
+    if (!navigator.permissions?.query) {
+      requestLocation();
+      return;
+    }
+    navigator.permissions.query({ name: "geolocation" })
+      .then((permission) => {
+        if (permission.state === "denied") {
+          setGeoError("La ubicación está desactivada. Mostramos el mapa general; podés buscar por barrio o ciudad.");
+          return;
+        }
+        requestLocation();
+      })
+      .catch(requestLocation);
+  }, []);
   return (
     <main className="explore-page">
       <section className="explore-intro">
@@ -1435,8 +1418,10 @@ function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
             <div>
               <h2>Directorio deportivo</h2>
               <span>
-                {!active
-                  ? "Elegí cómo usar el mapa"
+                {locating
+                  ? "Obteniendo tu ubicación mientras mostramos el mapa..."
+                  : !active
+                  ? loading ? "Cargando ubicaciones..." : `${profiles.length} opciones en el mapa general`
                   : loading
                   ? "Buscando..."
                   : `${profiles.length} ${profiles.length === 1 ? "opción encontrada" : "opciones encontradas"}${filters.lat && filters.lng ? ` a ${currentRadius} km de vos` : ""}`}
@@ -1468,6 +1453,7 @@ function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
               {error}
             </div>
           )}
+          {geoError && !error && <div className="map-location-notice" role="status"><LocateFixed size={17} /> {geoError}</div>}
           {active && !loading && !error && profiles.length === 0 && (
             <div className="empty-state">
               <Compass size={35} />
@@ -1487,9 +1473,7 @@ function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
               </button>
             </div>
           )}
-          {!active ? (
-            <IdleDirectory onLocate={locateNearby} locating={locating} geoError={geoError} />
-          ) : layout === "list" ? (
+          {layout === "list" ? (
             <div className="directory-grid">
               {profiles.map((profile) => (
                 <ProfileCard
@@ -3442,7 +3426,7 @@ export default function App() {
       });
   }, []);
   useEffect(() => {
-    if (!hasSearchCriteria(filters)) {
+    if (view !== "explore" && !hasSearchCriteria(filters)) {
       setProfiles([]);
       setDirectoryLoading(false);
       setDirectoryError("");
@@ -3460,7 +3444,7 @@ export default function App() {
       .catch((issue) => { if (!cancelled) setDirectoryError(issue.message); })
       .finally(() => { if (!cancelled) setDirectoryLoading(false); });
     return () => { cancelled = true; };
-  }, [filters]);
+  }, [filters, view]);
   useEffect(() => {
     if (!["clubs", "sports"].includes(view)) return;
     let cancelled = false;
