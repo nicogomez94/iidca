@@ -1103,7 +1103,7 @@ function DirectoryMap({ profiles, filters, onOpen, onRadiusChange }) {
   return (
     <div className="map-frame" aria-label="Mapa y filtros de entidades deportivas">
       <div className="map-topbar">
-        <div><span className="map-topbar-kicker">EXPLORÁ EN EL MAPA</span><strong>Tu próximo lugar puede estar cerca.</strong></div>
+        <div><span className="map-topbar-kicker">BUSCÁ EN EL MAPA</span><strong>Tu próximo lugar puede estar cerca.</strong></div>
         <span className="map-total"><MapPin size={16} /> {visiblePoints.length} ubicaciones</span>
       </div>
       <div className="map-layout">
@@ -1217,7 +1217,7 @@ function IdleDirectory({ onLocate, locating, geoError }) {
     <div className="map-frame map-idle" aria-label="Mapa sin resultados hasta iniciar una búsqueda">
       <div className="map-topbar">
         <div>
-          <span className="map-topbar-kicker">EXPLORÁ EN EL MAPA</span>
+          <span className="map-topbar-kicker">BUSCÁ EN EL MAPA</span>
           <strong>Tu próximo lugar puede estar cerca.</strong>
         </div>
         <button
@@ -1359,7 +1359,7 @@ function SportsPage({ profiles, loading, error, onOpen, onNavigate }) {
       <DirectoryPageIntro label="DISCIPLINAS IIDCA" title="Cada deporte abre" accent="un camino." description="Elegí una disciplina y descubrí los clubes y espacios donde podés practicarla." />
       <section className="container browse-content" aria-label="Deportes disponibles">
         <div className="browse-sports-heading">
-          <div><span>EXPLORÁ POR DISCIPLINA</span><h2>{loading ? "Cargando deportes..." : `${sports.length} ${sports.length === 1 ? "deporte disponible" : "deportes disponibles"}`}</h2></div>
+          <div><span>MAPA POR DISCIPLINA</span><h2>{loading ? "Cargando deportes..." : `${sports.length} ${sports.length === 1 ? "deporte disponible" : "deportes disponibles"}`}</h2></div>
           <label className="browse-sport-search"><Search size={18} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar un deporte" aria-label="Buscar un deporte" /></label>
         </div>
         {error && <div className="feedback error" role="alert">{error}</div>}
@@ -1420,12 +1420,12 @@ function Explore({ filters, onSearch, profiles, loading, error, onOpen }) {
       <section className="explore-intro">
         <div className="container">
           <div className="eyebrow eyebrow-blue">
-            <span className="eyebrow-dot" /> EXPLORÁ TU COMUNIDAD
+            <span className="eyebrow-dot" /> MAPA DE TU COMUNIDAD
           </div>
           <h1>
             Encontrá tu próximo <em>lugar.</em>
           </h1>
-          <p>Explorá clubes y actividades cerca tuyo.</p>
+          <p>Encontrá clubes y actividades cerca tuyo en el mapa.</p>
           <SearchForm initial={filters} onSearch={onSearch} compact />
         </div>
       </section>
@@ -2832,7 +2832,7 @@ function MemberProfile({ user, onUpdate, onExplore }) {
             </h2>
             <p>
               {user.role === "ATHLETE"
-                ? "Explorá clubes, profesionales y federaciones. Filtrá por deporte o barrio y encontrá un espacio para empezar."
+                ? "Mirá clubes, profesionales y federaciones en el mapa. Filtrá por deporte o barrio y encontrá un espacio para empezar."
                 : profile.status === "PENDING"
                   ? "El equipo de IIDCA validará la información antes de mostrarla en el directorio. Mientras tanto, podés completarla o ver el mapa de la comunidad."
                   : "Tu ficha ya se puede encontrar en el directorio deportivo."}
@@ -3340,7 +3340,7 @@ function Footer({ onNavigate, onAuth }) {
           <p>Oportunidades para que el deporte encuentre a las personas.</p>
         </div>
         <div className="footer-links">
-          <strong>Explorá</strong>
+          <strong>Mapa</strong>
           <button onClick={() => onNavigate("explore")}>
             Directorio deportivo
           </button>
