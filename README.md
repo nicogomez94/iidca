@@ -5,7 +5,7 @@ Aplicación responsive para acercar personas a oportunidades deportivas. Su tono
 ## Funciones
 
 - Inicio con fotografías de personas practicando deporte, transiciones respetuosas de la preferencia de movimiento reducido, tres historias de muestra y un formulario de contacto.
-- Directorio con búsqueda por deporte, ubicación y categoría, vista de listado y Google Maps, geolocalización opcional y fichas con actividades, dirección, fuente y estado de verificación.
+- Directorio con búsqueda por deporte, ubicación y categoría, vista de listado y Google Maps, geolocalización opcional y fichas con actividades, dirección, fuente y estado de verificación. El mapa distingue clubes y profesionales y permite mostrar cualquiera de los dos tipos o ambos.
 - Página `/clubes` con listado completo, búsqueda por nombre o dirección, filtros de disciplina y ubicación, ordenamiento y acceso a las fichas ampliadas.
 - Página `/deportes` con disciplinas agrupadas a partir de las actividades publicadas; al elegir una, muestra los espacios asociados y permite filtrar por ubicación.
 - Padrón inicial de 310 clubes reales obtenido de [Buenos Aires Data · Clubes](https://data.buenosaires.gob.ar/es_AR/dataset/clubes). La importación es repetible, registra procedencia y fecha, y evita duplicados por identificador de fuente o nombre y dirección.
@@ -14,6 +14,8 @@ Aplicación responsive para acercar personas a oportunidades deportivas. Su tono
 - La edición de cualquier perfil se realiza en un modal responsive. Cada cuenta puede subir hasta ocho fotos desde su dispositivo, recorrerlas en un carrusel con miniaturas y elegir cuál usar como portada, sin copiar URLs.
 - Los clubes declaran sus instalaciones al registrarse y administran una galería por cada una. La insignia de verificación se activa automáticamente cuando todas las instalaciones declaradas tienen al menos una foto y se revoca si alguna queda sin registro fotográfico.
 - Cada club cuenta con una ficha ampliada en `/clubes/:id`, accesible desde el modal del directorio y desde la vista de mapa, con instalaciones, fotografías, ubicación y datos de contacto.
+- Los profesionales, federaciones y sponsors publicados tienen fichas ampliadas en `/perfiles/:id`. Los profesionales pueden indicar una zona de trabajo y elegir un punto público aproximado sin publicar su domicilio. Los perfiles muestran solo los medios de contacto públicos disponibles.
+- El mural reúne noticias institucionales de IIDCA y publicaciones de clubes. El administrador las crea, edita y elimina desde `/admin/novedades`; cada una puede enlazar a una publicación externa mediante «Ver más». La carga es manual.
 - Solicitud de titularidad de una ficha por una organización registrada, con evidencia revisada por el administrador. La aprobación vincula la ficha a su cuenta y permite editarla.
 - Panel administrador con acceso separado en `/admin`, filtros y paginación de fichas, gestión de solicitudes, bitácora de cambios y exportaciones privadas en Excel y PDF.
 - [Presentación para clubes](public/para-clubes.html) para compartir el funcionamiento de la plataforma.
@@ -34,7 +36,7 @@ Para crear un administrador fuera del modo demo, agregar temporalmente `ADMIN_EM
 
 ## Google Maps
 
-La vista mapa tiene búsqueda por nombre, deporte o barrio, filtros rápidos de actividad, fotos de los clubes y una ficha seleccionada. Con `VITE_GOOGLE_MAPS_API_KEY` configurada, muestra simultáneamente los marcadores de todos los resultados filtrados. Sin clave, usa **Google Maps embebido**: el listado y los filtros funcionan, y cada club se puede ubicar al seleccionarlo; ese mapa embebido no puede dibujar simultáneamente todos los marcadores propios. Las indicaciones siempre abren Google Maps.
+La vista mapa tiene búsqueda por nombre, deporte o barrio, filtros rápidos de actividad, fotos de clubes y profesionales y una ficha seleccionada. Solo aparecen como marcadores los perfiles publicados que configuraron coordenadas públicas. Con `VITE_GOOGLE_MAPS_API_KEY` configurada, muestra simultáneamente marcadores diferenciados de todos los resultados filtrados. Sin clave, usa **Google Maps embebido**: el listado y los filtros funcionan, y cada perfil se puede ubicar al seleccionarlo; ese mapa embebido no puede dibujar simultáneamente todos los marcadores propios. Las indicaciones siempre abren Google Maps.
 
 Para activar los marcadores múltiples: crear una clave para **Maps JavaScript API** en Google Cloud, habilitar facturación y restringir la clave por **sitios web** (`https://149.34.224.87/*` para esta instalación) y por API (Maps JavaScript API). Guardar `VITE_GOOGLE_MAPS_API_KEY=...` en `/var/www/sites/iidca-social-club/shared/app.env` de `hosting` y volver a ejecutar `bash scripts/deploy-hosting.sh`. Vite incorpora la clave pública al frontend durante la compilación: las restricciones de Google Cloud son necesarias. Si Google rechaza el origen, revisar el referrer indicado en la consola del navegador.
 

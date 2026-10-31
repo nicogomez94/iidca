@@ -175,6 +175,29 @@ function categoryLabel(role) {
   return roleLabels[role] || role;
 }
 
+function profileHref(profile) {
+  return profile.category === "CLUB" ? `/clubes/${encodeURIComponent(profile.id)}` : `/perfiles/${encodeURIComponent(profile.id)}`;
+}
+
+function ProfileContactLinks({ profile, compact = false, className = "" }) {
+  if (!profile || profile.isDemo) return null;
+  const email = profile.email || (profile.category === "SPONSOR" ? profile.details?.corporateEmail : "");
+  const phone = profile.phone || (profile.category === "SPONSOR" ? profile.details?.contactPhone : "");
+  const digits = String(phone || "").replace(/\D/g, "");
+  const telephone = phone && digits.length >= 8 ? `tel:${String(phone).startsWith("+") ? "+" : ""}${digits}` : "";
+  const whatsapp = profile.phone && digits.length >= 10 ? `https://wa.me/${digits}` : "";
+  const website = /^https?:\/\//i.test(profile.website || "") ? profile.website : "";
+  if (!email && !telephone && !whatsapp && !website) return null;
+  return (
+    <div className={`profile-contact-links ${compact ? "is-compact" : ""} ${className}`} aria-label={`Contacto de ${profile.name}`}>
+      {whatsapp && <a href={whatsapp} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp de ${profile.name}`}><Phone size={compact ? 15 : 18} />{!compact && "WhatsApp"}</a>}
+      {email && <a href={`mailto:${email}`} aria-label={`Email de ${profile.name}`}><Mail size={compact ? 15 : 18} />{!compact && "Email"}</a>}
+      {telephone && <a href={telephone} aria-label={`Llamar a ${profile.name}`}><Phone size={compact ? 15 : 18} />{!compact && "Llamar"}</a>}
+      {website && <a href={website} target="_blank" rel="noopener noreferrer" aria-label={`Sitio web de ${profile.name}`}><ExternalLink size={compact ? 15 : 18} />{!compact && "Sitio web"}</a>}
+    </div>
+  );
+}
+
 function PhotoSlideshow({ photos, initialIndex = 0, title, subtitle, onClose }) {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const total = photos.length;
@@ -523,6 +546,16 @@ function HeroGraphic() {
   );
 }
 
+function NewsSourceBadge({ article }) {
+  const club = article.sourceType === "CLUB";
+  return <span className={`news-source-badge ${club ? "is-club" : "is-iidca"}`}>{club ? article.club?.name || "Club" : "IIDCA"}</span>;
+}
+
+function NewsExternalLink({ article }) {
+  if (!article.externalUrl) return null;
+  return <a className="news-external-link" href={article.externalUrl} target="_blank" rel="noopener noreferrer">Ver más <ExternalLink size={17} /></a>;
+}
+
 function Home({ onSearch, onNavigate, onAuth, articles }) {
   useEffect(() => {
     const elements = document.querySelectorAll("[data-reveal]");
@@ -619,17 +652,18 @@ function Home({ onSearch, onNavigate, onAuth, articles }) {
           </div>
           <div className="news-grid">
             {articles.slice(0, 3).map((story, index) => (
-              <article className={`news-card news-card-${index + 1}`} key={story.id} data-reveal>
+              <article className={`news-card news-card-${index + 1} ${story.sourceType === "CLUB" ? "is-club" : "is-iidca"}`} key={story.id} data-reveal>
                 <div className="news-image">
                   <img src={story.imageUrl} alt={story.imageAlt} loading="lazy" />
                 </div>
                 <div className="news-content">
-                  <span className="news-category">{story.category}</span>
+                  <div className="news-source-line"><NewsSourceBadge article={story} /><span className="news-category">{story.category}</span></div>
                   <h3>{story.title}</h3>
                   <p>{story.excerpt}</p>
                   <button onClick={() => onNavigate("article", story.slug)}>
                     Leer noticia <ArrowUpRight size={18} />
                   </button>
+                  <NewsExternalLink article={story} />
                 </div>
               </article>
             ))}
@@ -811,13 +845,14 @@ function NewsPage({ articles, loading, error, onNavigate }) {
       {!loading && !error && !articles.length && <div className="empty-state"><h2>Pronto habrá noticias.</h2><p>Volvé a visitarnos para conocer nuevas historias.</p></div>}
       {!loading && !error && articles.length > 0 && !visibleArticles.length && <div className="empty-state"><Search size={30} /><h2>No encontramos coincidencias.</h2><p>Probá con otra palabra o quitá los filtros.</p><button className="button button-outline" onClick={clearFilters}>Ver todas</button></div>}
       <div className="news-page-grid">
-        {visibleArticles.map((article) => <article className="news-list-card" key={article.id}>
+        {visibleArticles.map((article) => <article className={`news-list-card ${article.sourceType === "CLUB" ? "is-club" : "is-iidca"}`} key={article.id}>
           <button className="news-list-image" onClick={() => onNavigate("article", article.slug)} aria-label={`Leer ${article.title}`}><img src={article.imageUrl} alt={article.imageAlt} loading="lazy" /></button>
           <div>
-            <div className="news-card-meta"><span className="news-category">{article.category}</span><time dateTime={article.publishedAt || article.createdAt}>{new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(article.publishedAt || article.createdAt))}</time></div>
+            <div className="news-card-meta"><div className="news-source-line"><NewsSourceBadge article={article} /><span className="news-category">{article.category}</span></div><time dateTime={article.publishedAt || article.createdAt}>{new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(article.publishedAt || article.createdAt))}</time></div>
             <h2>{article.title}</h2>
             <p>{article.excerpt}</p>
             <button className="news-read-link" onClick={() => onNavigate("article", article.slug)}>Leer noticia <ArrowUpRight size={18} /></button>
+            <NewsExternalLink article={article} />
           </div>
         </article>)}
       </div>
@@ -828,11 +863,11 @@ function NewsPage({ articles, loading, error, onNavigate }) {
 function NewsArticle({ article, loading, onNavigate }) {
   if (loading) return <main className="news-article-page container"><p>Cargando noticia...</p></main>;
   if (!article) return <main className="news-article-page container"><div className="empty-state"><h1>No encontramos esa noticia.</h1><button className="button button-primary" onClick={() => onNavigate("news")}>Ver noticias</button></div></main>;
-  return <main className="news-article-page">
+  return <main className={`news-article-page ${article.sourceType === "CLUB" ? "is-club" : "is-iidca"}`}>
     <div className="container"><button className="news-back" onClick={() => onNavigate("news")}><ArrowLeft size={18} /> Todas las noticias</button>
-      <div className="news-article-heading"><span className="news-category">{article.category}</span><h1>{article.title}</h1><p>{article.excerpt}</p></div>
+      <div className="news-article-heading"><div className="news-source-line"><NewsSourceBadge article={article} /><span className="news-category">{article.category}</span></div><h1>{article.title}</h1><p>{article.excerpt}</p></div>
       <img className="news-article-image" src={article.imageUrl} alt={article.imageAlt} />
-      <div className="news-article-body">{article.body.split(/\n\s*\n/).filter(Boolean).map((paragraph, index) => <p key={index}>{paragraph}</p>)}<button className="button button-primary" onClick={() => onNavigate("explore")}>Ver mapa <ArrowUpRight size={18} /></button></div>
+      <div className="news-article-body">{article.body.split(/\n\s*\n/).filter(Boolean).map((paragraph, index) => <p key={index}>{paragraph}</p>)}<div className="news-article-actions"><NewsExternalLink article={article} /><button className="button button-primary" onClick={() => onNavigate("explore")}>Ver mapa <ArrowUpRight size={18} /></button></div></div>
     </div>
   </main>;
 }
@@ -924,6 +959,7 @@ function ProfileCard({ profile, onOpen }) {
           <span key={sport}>{sport}</span>
         ))}
       </div>
+      <ProfileContactLinks profile={profile} compact className="profile-card-contacts" />
       <div className="card-footer">
         <span>
           <MapPin size={15} /> {profile.neighborhood || profile.city}
@@ -975,7 +1011,7 @@ function FocusGoogleMap({ profile }) {
   return null;
 }
 
-function SelectedMapCard({ profile, onOpen, onClose }) {
+function SelectedMapCard({ profile, onClose }) {
   const map = useMap();
   const [container, setContainer] = useState(null);
   useEffect(() => {
@@ -1009,14 +1045,15 @@ function SelectedMapCard({ profile, onOpen, onClose }) {
     <div className="map-marker-card">
       <img src={profile.imageUrl || "/images/sports/running.jpg"} alt="" />
       <div className="map-marker-card-copy">
-        <span>ESTÁS VIENDO</span>
+        <span>{categoryLabel(profile.category).toUpperCase()}</span>
         <strong>{profile.name}</strong>
-        <small>{profile.neighborhood || profile.city}</small>
+        <small>{profile.details?.workArea || profile.neighborhood || profile.city}</small>
+        <ProfileContactLinks profile={profile} compact />
         <button className="map-see-all" onClick={onClose}>Ver todos los puntos</button>
       </div>
-      <button className="map-selected-detail" onClick={() => onOpen(profile)} aria-label={`Ver ficha de ${profile.name}`}>
+      <a className="map-selected-detail" href={profileHref(profile)} aria-label={`Ver ficha completa de ${profile.name}`}>
         <ArrowUpRight size={19} />
-      </button>
+      </a>
     </div>,
     container,
   ) : null;
@@ -1063,33 +1100,34 @@ function normalizeMapText(value) {
 }
 
 const mapSports = ["Fútbol", "Básquet", "Vóley", "Natación", "Tenis", "Gimnasia"];
-const mapPin = (active) => `data:image/svg+xml,${encodeURIComponent(`
+const mapPin = (category, active) => `data:image/svg+xml,${encodeURIComponent(`
   <svg xmlns="http://www.w3.org/2000/svg" width="44" height="58" viewBox="0 0 44 58">
-    <path d="M22 2C10.4 2 2 10.6 2 22c0 14 20 33 20 33s20-19 20-33C42 10.6 33.6 2 22 2Z" fill="#090c70" stroke="${active ? "#ff9d00" : "#ffffff"}" stroke-width="3"/>
-    <path d="M12 14 22 11 32 14 30 29 22 35 14 29Z" fill="#ffffff"/>
-    <path d="M16 17 22 15 28 17 27 27 22 31 17 27Z" fill="#090c70"/>
-    <path d="m22 17 1.1 3.1h3.3l-2.7 2 1 3.1-2.7-1.9-2.7 1.9 1-3.1-2.7-2h3.3Z" fill="#ff9d00"/>
+    <path d="M22 2C10.4 2 2 10.6 2 22c0 14 20 33 20 33s20-19 20-33C42 10.6 33.6 2 22 2Z" fill="${category === "PROFESSIONAL" ? "#e91819" : "#090c70"}" stroke="${active ? "#ff9d00" : "#ffffff"}" stroke-width="3"/>
+    ${category === "PROFESSIONAL" ? '<circle cx="22" cy="22" r="11" fill="#ffffff"/><text x="22" y="28" text-anchor="middle" font-family="sans-serif" font-size="17" font-weight="bold" fill="#e91819">P</text>' : '<path d="M12 14 22 11 32 14 30 29 22 35 14 29Z" fill="#ffffff"/><path d="M16 17 22 15 28 17 27 27 22 31 17 27Z" fill="#090c70"/><path d="m22 17 1.1 3.1h3.3l-2.7 2 1 3.1-2.7-1.9-2.7 1.9 1-3.1-2.7-2h3.3Z" fill="#ff9d00"/>'}
   </svg>
 `)}`;
 
-function DirectoryMap({ profiles, filters, onOpen, onRadiusChange }) {
+function DirectoryMap({ profiles, filters, onRadiusChange }) {
   const [focused, setFocused] = useState(null);
   const [mapSearch, setMapSearch] = useState("");
+  const [selectedType, setSelectedType] = useState("both");
   const [selectedSport, setSelectedSport] = useState("");
   const [selectedArea, setSelectedArea] = useState("");
   const points = useMemo(() => profiles.filter(
-    (profile) => Number.isFinite(Number(profile.latitude)) && Number.isFinite(Number(profile.longitude)) && profile.latitude !== null && profile.longitude !== null,
+    (profile) => ["CLUB", "PROFESSIONAL"].includes(profile.category) && Number.isFinite(Number(profile.latitude)) && Number.isFinite(Number(profile.longitude)) && profile.latitude !== null && profile.longitude !== null,
   ), [profiles]);
   const areas = useMemo(() => [...new Set(points.map((profile) => profile.neighborhood || profile.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es")), [points]);
   const visiblePoints = useMemo(() => points.filter((profile) => {
     const haystack = normalizeMapText([profile.name, profile.neighborhood, profile.city, ...(profile.sports || [])].join(" "));
     return (!mapSearch || haystack.includes(normalizeMapText(mapSearch)))
+      && (selectedType === "both" || profile.category === selectedType)
       && (!selectedArea || (profile.neighborhood || profile.city) === selectedArea)
       && (!selectedSport || (profile.sports || []).some((sport) => normalizeMapText(sport).includes(normalizeMapText(selectedSport))));
-  }), [points, mapSearch, selectedArea, selectedSport]);
+  }), [points, mapSearch, selectedType, selectedArea, selectedSport]);
   const selected = visiblePoints.find((profile) => profile.id === focused?.id) || null;
   const clearMapFilters = () => {
     setMapSearch("");
+    setSelectedType("both");
     setSelectedSport("");
     setSelectedArea("");
     setFocused(null);
@@ -1116,9 +1154,9 @@ function DirectoryMap({ profiles, filters, onOpen, onRadiusChange }) {
                 <FocusGoogleMap profile={selected} />
                 <NearbyRadius filters={filters} />
                 {visiblePoints.map((profile) => (
-                  <Marker key={profile.id} position={{ lat: Number(profile.latitude), lng: Number(profile.longitude) }} icon={mapPin(selected?.id === profile.id)} zIndex={selected?.id === profile.id ? 100 : 1} title={profile.name} onClick={() => setFocused(profile)} />
+                  <Marker key={profile.id} position={{ lat: Number(profile.latitude), lng: Number(profile.longitude) }} icon={mapPin(profile.category, selected?.id === profile.id)} zIndex={selected?.id === profile.id ? 100 : 1} title={`${categoryLabel(profile.category)}: ${profile.name}`} onClick={() => setFocused(profile)} />
                 ))}
-                {selected && <SelectedMapCard profile={selected} onOpen={onOpen} onClose={() => setFocused(null)} />}
+                {selected && <SelectedMapCard profile={selected} onClose={() => setFocused(null)} />}
               </GoogleMap>
             </APIProvider>
           ) : (
@@ -1128,8 +1166,8 @@ function DirectoryMap({ profiles, filters, onOpen, onRadiusChange }) {
             <div className="map-marker-card-anchor map-marker-card-fallback">
               <div className="map-marker-card">
                 <img src={selected.imageUrl || "/images/sports/running.jpg"} alt="" />
-                <div className="map-marker-card-copy"><span>ESTÁS VIENDO</span><strong>{selected.name}</strong><small>{selected.neighborhood || selected.city}</small><button className="map-see-all" onClick={() => setFocused(null)}>Ver todos los puntos</button></div>
-                <button className="map-selected-detail" onClick={() => onOpen(selected)} aria-label={`Ver ficha de ${selected.name}`}><ArrowUpRight size={19} /></button>
+                <div className="map-marker-card-copy"><span>{categoryLabel(selected.category).toUpperCase()}</span><strong>{selected.name}</strong><small>{selected.details?.workArea || selected.neighborhood || selected.city}</small><ProfileContactLinks profile={selected} compact /><button className="map-see-all" onClick={() => setFocused(null)}>Ver todos los puntos</button></div>
+                <a className="map-selected-detail" href={profileHref(selected)} aria-label={`Ver ficha completa de ${selected.name}`}><ArrowUpRight size={19} /></a>
               </div>
             </div>
           )}
@@ -1137,6 +1175,12 @@ function DirectoryMap({ profiles, filters, onOpen, onRadiusChange }) {
         <aside className="map-sidebar" aria-label="Filtros y resultados del mapa">
           <div className="map-filters">
             <div className="map-filters-heading"><strong>Filtrá tu búsqueda</strong><button onClick={clearMapFilters}>Limpiar</button></div>
+            <div className="map-type-filters" role="group" aria-label="Tipo de perfil en el mapa">
+              {[["both", "Ambos"], ["CLUB", "Clubes"], ["PROFESSIONAL", "Profesionales"]].map(([value, label]) => (
+                <button type="button" key={value} className={selectedType === value ? "active" : ""} aria-pressed={selectedType === value} onClick={() => { setSelectedType(value); setFocused(null); }}>{label}</button>
+              ))}
+            </div>
+            <div className="map-marker-legend"><span><i className="is-club" /> Clubes</span><span><i className="is-professional" /> Profesionales</span></div>
             <label className="map-search-field"><Search size={18} /><input value={mapSearch} onChange={(event) => setMapSearch(event.target.value)} placeholder="Club, deporte o barrio" aria-label="Buscar en el mapa" /></label>
             <label className="map-area-field"><MapPin size={18} /><select value={selectedArea} onChange={(event) => { setSelectedArea(event.target.value); setFocused(null); }} aria-label="Filtrar por barrio"><option value="">Todos los barrios</option>{areas.map((area) => <option value={area} key={area}>{area}</option>)}</select></label>
             {filters.lat && filters.lng && (
@@ -1164,7 +1208,7 @@ function DirectoryMap({ profiles, filters, onOpen, onRadiusChange }) {
             {visiblePoints.map((profile) => (
               <button key={profile.id} className={`map-result ${selected?.id === profile.id ? "selected" : ""}`} onClick={() => setFocused(profile)} aria-pressed={selected?.id === profile.id}>
                 <img src={profile.imageUrl || "/images/sports/running.jpg"} alt="" loading="lazy" />
-                <span><strong>{profile.name}</strong><small><MapPin size={13} />{profile.neighborhood || profile.city}{profile.distanceKm !== null && profile.distanceKm !== undefined ? ` · ${profile.distanceKm} km` : ""}</small><em>{profile.sports?.slice(0, 2).join(" · ") || categoryLabel(profile.category)}</em></span>
+                <span><strong>{profile.name}</strong><small><MapPin size={13} />{profile.details?.workArea || profile.neighborhood || profile.city}{profile.distanceKm !== null && profile.distanceKm !== undefined ? ` · ${profile.distanceKm} km` : ""}</small><em>{categoryLabel(profile.category)} · {profile.sports?.slice(0, 2).join(" · ") || "Actividad deportiva"}</em></span>
                 <ArrowUpRight size={17} />
               </button>
             ))}
@@ -1179,14 +1223,16 @@ function DirectoryMap({ profiles, filters, onOpen, onRadiusChange }) {
   );
 }
 
-function LocationPicker({ latitude, longitude, onChoose }) {
+function LocationPicker({ latitude, longitude, onChoose, professional = false }) {
   const center = latitude && longitude ? { lat: Number(latitude), lng: Number(longitude) } : { lat: -34.6037, lng: -58.3816 };
   return (
     <div className="location-picker">
       <div>
-        <strong>Ubicá tu espacio en el mapa</strong>
+        <strong>{professional ? "Elegí un punto público de atención" : "Ubicá tu espacio en el mapa"}</strong>
         <span>
-          Opcional. Elegí una ubicación para aparecer en las búsquedas cercanas.
+          {professional
+            ? "Opcional. Podés marcar una zona aproximada para aparecer en el mapa; no hace falta indicar tu domicilio particular. El punto elegido será público."
+            : "Opcional. Elegí una ubicación para aparecer en las búsquedas cercanas."}
         </span>
       </div>
       {googleMapsKey ? (
@@ -1206,7 +1252,7 @@ function LocationPicker({ latitude, longitude, onChoose }) {
         </>
       )}
       {latitude && longitude && (
-        <small>Ubicación seleccionada. Podés cambiarla con otro clic.</small>
+        <div className="location-picker-selection"><small>Ubicación pública seleccionada. Podés cambiarla con otro clic.</small><button type="button" onClick={() => onChoose({ lat: "", lng: "" })}>Quitar ubicación</button></div>
       )}
     </div>
   );
@@ -1516,7 +1562,6 @@ function DetailModal({ profile, onClose, user, onAuth, onNavigate }) {
   const [claimMessage, setClaimMessage] = useState("");
   const [claimBusy, setClaimBusy] = useState(false);
   if (!profile) return null;
-  const phone = profile.phone?.replace(/[^\d+]/g, "");
   const detailFields = Object.fromEntries(publicRoleFields(profile.category).filter((field) => fieldIsVisible(field, profile.details || {})).map((field) => [field.name, field]));
   const submitClaim = async (event) => {
     event.preventDefault();
@@ -1635,32 +1680,10 @@ function DetailModal({ profile, onClose, user, onAuth, onNavigate }) {
             </div>
           )}
           <div className="detail-actions">
-            {profile.category === "CLUB" && (
-              <button className="button button-orange" onClick={() => { onClose(); onNavigate("club", profile.id); }}>
-                Ver perfil completo <ArrowUpRight size={18} />
-              </button>
-            )}
-            {profile.email && !profile.isDemo && (
-              <a
-                className="button button-primary"
-                href={`mailto:${profile.email}`}
-              >
-                <Mail size={18} /> Escribir por email
-              </a>
-            )}
-            {phone && !profile.isDemo && (
-              <a className="button button-outline" href={`tel:${phone}`}><Phone size={18} /> Llamar</a>
-            )}
-            {phone && !profile.isDemo && (
-              <a
-                className="button button-outline"
-                href={`https://wa.me/${phone.replace("+", "")}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Contactar por WhatsApp
-              </a>
-            )}
+            <button className="button button-orange" onClick={() => { onClose(); onNavigate(profile.category === "CLUB" ? "club" : "publicProfile", profile.id); }}>
+              Ver perfil completo <ArrowUpRight size={18} />
+            </button>
+            <ProfileContactLinks profile={profile} />
             {profile.latitude !== null && profile.longitude !== null && (
               <a
                 className="button button-outline"
@@ -1679,7 +1702,7 @@ function DetailModal({ profile, onClose, user, onAuth, onNavigate }) {
             </p>
           )}
           {profile.sourceUrl && <p className="source-note">Datos iniciales: <a href={profile.sourceUrl} target="_blank" rel="noopener noreferrer">{profile.sourceName}</a>. Confirmá actividades y contacto con el club antes de asistir.</p>}
-          {profile.sourceKey && profile.verification !== "VERIFIED" && (
+          {profile.category === "CLUB" && profile.sourceKey && profile.verification !== "VERIFIED" && (
             <section className="claim-panel">
               <h3>¿Representás a este club?</h3>
               <p>Reclamá la ficha para actualizar datos, publicar actividades y contar lo que sucede en tu comunidad.</p>
@@ -1705,7 +1728,6 @@ function DetailModal({ profile, onClose, user, onAuth, onNavigate }) {
 function ClubProfilePage({ profile, loading, error, onNavigate }) {
   if (loading) return <main className="club-profile-page"><div className="container empty-state"><p>Cargando perfil del club...</p></div></main>;
   if (error || !profile || profile.category !== "CLUB") return <main className="club-profile-page"><div className="container empty-state"><Building2 size={34} /><h1>No encontramos este club.</h1><p>{error || "La ficha no está disponible."}</p><button className="button button-primary" onClick={() => onNavigate("clubs")}>Volver a clubes</button></div></main>;
-  const phone = profile.phone?.replace(/[^\d+]/g, "");
   const facilities = profile.facilities || [];
   const details = publicRoleFields("CLUB").map((field) => [field.label, profile.details?.[field.name]]).filter(([, value]) => hasValue(value));
   return (
@@ -1760,14 +1782,47 @@ function ClubProfilePage({ profile, loading, error, onNavigate }) {
             <span className="club-verification-kicker">CONTACTO DEL CLUB</span>
             <h2>¿Querés conocerlo?</h2>
             <p>Consultá horarios, actividades disponibles y requisitos directamente con el club.</p>
-            {profile.email && <a className="button button-primary full-width" href={`mailto:${profile.email}`}><Mail size={18} /> Escribir por email</a>}
-            {phone && <a className="button button-orange full-width" href={`https://wa.me/${phone.replace("+", "")}`} target="_blank" rel="noopener noreferrer">Contactar por WhatsApp</a>}
-            {phone && <a className="club-contact-link" href={`tel:${phone}`}><Phone size={17} /> Llamar por teléfono</a>}
-            {profile.website && <a className="club-contact-link" href={profile.website.startsWith("http") ? profile.website : `https://${profile.website}`} target="_blank" rel="noopener noreferrer"><ExternalLink size={17} /> Sitio web</a>}
+            <ProfileContactLinks profile={profile} className="club-profile-contact-links" />
             {profile.instagram && <a className="club-contact-link" href={`https://instagram.com/${profile.instagram.replace(/^@/, "")}`} target="_blank" rel="noopener noreferrer"><Sparkles size={17} /> {profile.instagram}</a>}
           </div>
           <div className="club-trust-card"><ShieldCheck size={24} /><div><strong>¿Qué significa verificado?</strong><p>Que cada instalación declarada por el club tiene al menos una foto publicada en su ficha.</p></div></div>
         </aside>
+      </div>
+    </main>
+  );
+}
+
+function PublicProfilePage({ profile, loading, error, onNavigate }) {
+  if (loading) return <main className="public-profile-page container"><p className="browse-feedback">Cargando perfil...</p></main>;
+  if (error || !profile || profile.category === "CLUB") return (
+    <main className="public-profile-page container"><div className="empty-state"><h1>No encontramos este perfil.</h1><p>{error || "La ficha no está disponible."}</p><button className="button button-primary" onClick={() => onNavigate("explore")}>Volver al directorio</button></div></main>
+  );
+  const facts = publicRoleFields(profile.category)
+    .filter((field) => fieldIsVisible(field, profile.details || {}) && hasValue(profile.details?.[field.name]))
+    .map((field) => [field.label, profile.details[field.name]]);
+  return (
+    <main className="public-profile-page">
+      <div className="container">
+        <button className="news-back" onClick={() => onNavigate("explore")}><ArrowLeft size={18} /> Volver al directorio</button>
+        <div className="public-profile-layout">
+          <article className="public-profile-main">
+            <img className="public-profile-cover" src={profile.imageUrl || "/images/sports/running.jpg"} alt={profile.imageIllustrative || !profile.imageUrl ? `Actividad deportiva de ${profile.name}` : profile.name} />
+            <div className="public-profile-copy">
+              <span className="news-category">{categoryLabel(profile.category)}</span>
+              <h1>{profile.name}</h1>
+              {profile.headline && <p className="public-profile-headline">{profile.headline}</p>}
+              <p className="public-profile-location"><MapPin size={17} /> {profile.details?.workArea || [profile.neighborhood, profile.city].filter(Boolean).join(", ")}</p>
+              {profile.description && <p>{profile.description}</p>}
+              {profile.sports?.length > 0 && <div className="sport-tags detail-tags">{profile.sports.map((sport) => <span key={sport}>{sport}</span>)}</div>}
+              {facts.length > 0 && <div className="detail-facts">{facts.map(([label, value]) => <div key={label}><strong>{label}</strong><DetailValue value={value} /></div>)}</div>}
+              {profile.address && <p className="public-profile-address"><MapPin size={17} /> Dirección pública: {profile.address}</p>}
+              {profile.latitude != null && profile.longitude != null && (
+                <section className="public-profile-map"><h2>{profile.category === "PROFESSIONAL" ? "Zona pública de atención" : "Ubicación"}</h2><iframe title={`Mapa público de ${profile.name}`} src={`https://maps.google.com/maps?q=${profile.latitude},${profile.longitude}&z=14&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /></section>
+              )}
+            </div>
+          </article>
+          <aside className="club-contact-card public-profile-contact"><span className="club-verification-kicker">CONTACTO</span><h2>Conectá directamente</h2><p>Consultá disponibilidad y condiciones con {profile.name}.</p><ProfileContactLinks profile={profile} />{profile.instagram && <a className="club-contact-link" href={`https://instagram.com/${profile.instagram.replace(/^@/, "")}`} target="_blank" rel="noopener noreferrer"><Sparkles size={17} /> Instagram</a>}</aside>
+        </div>
       </div>
     </main>
   );
@@ -2130,6 +2185,20 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
                   className="auth-form"
                   onSubmit={(event) => {
                     event.preventDefault();
+                    const missing = requiredMissing(role, draft);
+                    if (missing.length) {
+                      setError(`Completá los campos obligatorios: ${missing.map((field) => field.label).join(", ")}.`);
+                      return;
+                    }
+                    if (role === "CLUB" && !clubFacilities.some((name) => name.trim())) {
+                      setError("Agregá al menos una instalación del club.");
+                      return;
+                    }
+                    if (Boolean(draft.latitude) !== Boolean(draft.longitude)) {
+                      setError("Completá ambas coordenadas o quitá la ubicación del mapa.");
+                      return;
+                    }
+                    setError("");
                     setStep(2);
                   }}
                 >
@@ -2180,7 +2249,7 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
                     />
                     {role !== "ATHLETE" && (
                       <FormField
-                        field={{ label: "Dirección o zona de atención" }}
+                        field={{ label: role === "PROFESSIONAL" ? "Dirección pública (opcional)" : "Dirección o zona de atención", placeholder: role === "PROFESSIONAL" ? "Solo si querés mostrar una dirección exacta" : "" }}
                         value={draft.address}
                         onChange={(value) => change("address", value)}
                       />
@@ -2199,6 +2268,7 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
                     <FacilityDeclaration facilities={clubFacilities.length ? clubFacilities : [""]} onChange={setClubFacilities} />
                   )}
                   <LocationPicker
+                      professional={role === "PROFESSIONAL"}
                       latitude={draft.latitude}
                       longitude={draft.longitude}
                       onChoose={({ lat, lng }) =>
@@ -2232,6 +2302,7 @@ function AuthModal({ mode, onClose, onSuccess, onMode }) {
                       />
                     </>
                   )}
+                  {error && <div className="feedback error" role="alert">{error}</div>}
                   <div className="form-navigation">
                     <button
                       type="button"
@@ -2691,7 +2762,7 @@ function ProfileEditModal({ user, profile, onClose, onSaved, onProfileChange }) 
             <FormField field={{ label: "Deporte principal" }} value={draft.sport} onChange={(value) => setDraft({ ...draft, sport: value })} />
             <FormField field={{ label: "Deportes (separados por comas)" }} value={Array.isArray(draft.sports) ? draft.sports.join(", ") : draft.sports} onChange={(value) => setDraft({ ...draft, sports: value })} />
             {user.role !== "ATHLETE" && <>
-              <FormField field={{ label: "Dirección" }} value={draft.address} onChange={(value) => setDraft({ ...draft, address: value })} />
+              <FormField field={{ label: user.role === "PROFESSIONAL" ? "Dirección pública (opcional)" : "Dirección", placeholder: user.role === "PROFESSIONAL" ? "Solo si querés mostrar una dirección exacta" : "" }} value={draft.address} onChange={(value) => setDraft({ ...draft, address: value })} />
               <FormField field={{ label: "Email público", type: "email" }} value={draft.email} onChange={(value) => setDraft({ ...draft, email: value })} />
               <FormField field={{ label: "WhatsApp público" }} value={draft.phone} onChange={(value) => setDraft({ ...draft, phone: value })} />
               <FormField field={{ label: "Instagram" }} value={draft.instagram} onChange={(value) => setDraft({ ...draft, instagram: value })} />
@@ -2699,7 +2770,7 @@ function ProfileEditModal({ user, profile, onClose, onSaved, onProfileChange }) 
             </>}
           </div>
           {user.role !== "ATHLETE" && <>
-            <LocationPicker latitude={draft.latitude} longitude={draft.longitude} onChoose={({ lat, lng }) => setDraft({ ...draft, latitude: lat, longitude: lng })} />
+            <LocationPicker professional={user.role === "PROFESSIONAL"} latitude={draft.latitude} longitude={draft.longitude} onChoose={({ lat, lng }) => setDraft({ ...draft, latitude: lat, longitude: lng })} />
             <FormField field={{ label: "Frase principal" }} value={draft.headline} onChange={(value) => setDraft({ ...draft, headline: value })} />
             <FormField field={{ label: "Descripción", type: "textarea", maxLength: user.role === "FEDERATION" ? 500 : 1200 }} value={draft.description} onChange={(value) => setDraft({ ...draft, description: value })} />
           </>}
@@ -2859,15 +2930,15 @@ function MemberProfile({ user, onUpdate, onExplore }) {
             setSuccess(user.role === "ATHLETE" ? "Tus cambios se guardaron." : "Tus cambios se guardaron. El perfil quedó pendiente de revisión.");
           }}
         />}
-        <DetailModal profile={selectedNearby} onClose={() => setSelectedNearby(null)} user={user} onAuth={() => {}} onNavigate={(next, id) => { setSelectedNearby(null); if (next === "club") window.location.assign(`/clubes/${encodeURIComponent(id)}`); }} />
+        <DetailModal profile={selectedNearby} onClose={() => setSelectedNearby(null)} user={user} onAuth={() => {}} onNavigate={(next, id) => { setSelectedNearby(null); if (next === "club" || next === "publicProfile") window.location.assign(next === "club" ? `/clubes/${encodeURIComponent(id)}` : `/perfiles/${encodeURIComponent(id)}`); }} />
       </div>
     </main>
   );
 }
 
-const emptyNewsDraft = { title: "", excerpt: "", body: "", category: "", imageUrl: "/images/editorial/fitness-class.jpg", imageAlt: "", published: false };
+const emptyNewsDraft = { title: "", excerpt: "", body: "", category: "", imageUrl: "/images/editorial/fitness-class.jpg", imageAlt: "", sourceType: "IIDCA", clubId: "", externalUrl: "", published: false };
 
-function AdminNews() {
+function AdminNews({ clubs }) {
   const [articles, setArticles] = useState([]);
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState("");
@@ -2901,18 +2972,21 @@ function AdminNews() {
     {editing && <form className="dashboard-card admin-news-form" onSubmit={save}>
       <div className="admin-list-heading"><h2>{editing.id ? "Editar noticia" : "Nueva noticia"}</h2><button type="button" className="admin-news-cancel" onClick={() => setEditing(null)}>Cancelar</button></div>
       <div className="admin-news-form-grid">
+        <label>Publica<select value={editing.sourceType || "IIDCA"} onChange={(event) => setEditing({ ...editing, sourceType: event.target.value, clubId: "" })}><option value="IIDCA">IIDCA</option><option value="CLUB">Un club</option></select></label>
+        {editing.sourceType === "CLUB" && <label>Club<select required value={editing.clubId || ""} onChange={(event) => setEditing({ ...editing, clubId: event.target.value })}><option value="">Elegí un club publicado</option>{clubs.map((club) => <option key={club.id} value={club.id}>{club.name}</option>)}</select></label>}
         <label className="admin-news-wide">Título<input required maxLength={140} value={editing.title} onChange={(event) => setEditing({ ...editing, title: event.target.value })} /></label>
-        <label>Categoría<input required maxLength={55} value={editing.category} onChange={(event) => setEditing({ ...editing, category: event.target.value })} placeholder="Ej. VIDA ACTIVA" /></label>
+        <label>Categoría (opcional)<input maxLength={55} value={editing.category || ""} onChange={(event) => setEditing({ ...editing, category: event.target.value })} placeholder="Ej. VIDA ACTIVA" /></label>
         <label>Foto<select value={["/images/editorial/fitness-class.jpg", "/images/editorial/park-exercise.jpg", "/images/editorial/yoga-class.jpg"].includes(editing.imageUrl) ? editing.imageUrl : "custom"} onChange={(event) => setEditing({ ...editing, imageUrl: event.target.value === "custom" ? "" : event.target.value })}><option value="/images/editorial/fitness-class.jpg">Clase de gimnasia</option><option value="/images/editorial/park-exercise.jpg">Actividad en parque</option><option value="/images/editorial/yoga-class.jpg">Clase de yoga</option><option value="custom">Otra URL HTTPS</option></select></label>
         <label className="admin-news-wide">URL de la foto<input required value={editing.imageUrl} onChange={(event) => setEditing({ ...editing, imageUrl: event.target.value })} placeholder="https://..." /></label>
-        <label className="admin-news-wide">Descripción de la foto<input required maxLength={180} value={editing.imageAlt} onChange={(event) => setEditing({ ...editing, imageAlt: event.target.value })} /></label>
-        <label className="admin-news-wide">Resumen<input required maxLength={320} value={editing.excerpt} onChange={(event) => setEditing({ ...editing, excerpt: event.target.value })} /></label>
-        <label className="admin-news-wide">Contenido<textarea required rows={8} value={editing.body} onChange={(event) => setEditing({ ...editing, body: event.target.value })} placeholder="Separá los párrafos con una línea en blanco." /></label>
+        <label className="admin-news-wide">Descripción de la foto (opcional)<input maxLength={180} value={editing.imageAlt || ""} onChange={(event) => setEditing({ ...editing, imageAlt: event.target.value })} placeholder="Si queda vacío, se usa el título" /></label>
+        <label className="admin-news-wide">Descripción<input required maxLength={320} value={editing.excerpt} onChange={(event) => setEditing({ ...editing, excerpt: event.target.value })} /></label>
+        <label className="admin-news-wide">Contenido ampliado (opcional)<textarea rows={8} value={editing.body || ""} onChange={(event) => setEditing({ ...editing, body: event.target.value })} placeholder="Si queda vacío, se usa la descripción." /></label>
+        <label className="admin-news-wide">Enlace externo (opcional)<input type="url" value={editing.externalUrl || ""} onChange={(event) => setEditing({ ...editing, externalUrl: event.target.value })} placeholder="https://instagram.com/..." /></label>
       </div>
       <div className="admin-news-form-bottom"><label><input type="checkbox" checked={editing.published} onChange={(event) => setEditing({ ...editing, published: event.target.checked })} /> Publicar en el sitio</label><button className="button button-primary" disabled={busy}>Guardar noticia</button></div>
     </form>}
     <div className="admin-news-list">{articles.map((article) => <article className="dashboard-card admin-news-item" key={article.id}>
-      <img src={article.imageUrl} alt={article.imageAlt} /><div><span className="news-category">{article.category}</span><h2>{article.title}</h2><p>{article.excerpt}</p><span className={`status-badge ${article.published ? "status-published" : "status-hidden"}`}>{article.published ? "Publicada" : "Borrador"}</span></div>
+      <img src={article.imageUrl} alt={article.imageAlt} /><div><span className={`news-source-badge ${article.sourceType === "CLUB" ? "is-club" : "is-iidca"}`}>{article.sourceType === "CLUB" ? article.club?.name || "Club" : "IIDCA"}</span><span className="news-category">{article.category}</span><h2>{article.title}</h2><p>{article.excerpt}</p>{article.externalUrl && <a href={article.externalUrl} target="_blank" rel="noopener noreferrer">Ver enlace externo <ExternalLink size={14} /></a>}<span className={`status-badge ${article.published ? "status-published" : "status-hidden"}`}>{article.published ? "Publicada" : "Borrador"}</span></div>
       <div className="admin-news-actions"><button disabled={busy} onClick={() => setEditing({ ...article })}>Editar</button><button disabled={busy} onClick={() => togglePublished(article)}>{article.published ? "Ocultar" : "Publicar"}</button>{deleteId === article.id ? <><button disabled={busy} onClick={() => remove(article.id)}>Confirmar eliminación</button><button onClick={() => setDeleteId(null)}>Cancelar</button></> : <button onClick={() => setDeleteId(article.id)}>Eliminar</button>}</div>
     </article>)}</div>
   </div>;
@@ -3293,14 +3367,15 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
           )}
           {overview && pageCount > 1 && <div className="admin-pagination"><span>Mostrando {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, visibleProfiles.length)} de {visibleProfiles.length} · página {currentPage} de {pageCount}</span><div><button disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Anterior</button><button disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>Siguiente</button></div></div>}
         </section>}
-        {activeSection === "novedades" && <AdminNews />}
+        {activeSection === "novedades" && <AdminNews clubs={(overview?.profiles || []).filter((profile) => profile.category === "CLUB" && profile.status === "PUBLISHED").sort((a, b) => a.name.localeCompare(b.name, "es"))} />}
         {activeSection === "importador" && <AdminImport onImported={load} />}
         {editing && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setEditing(null)}>
           <form className="admin-edit-modal" onSubmit={saveEdit} role="dialog" aria-modal="true" aria-label={`Editar ${editing.name}`}>
             <button type="button" className="modal-close" onClick={() => setEditing(null)} aria-label="Cerrar"><X /></button>
             <h2>Editar ficha</h2>
             <p>Los cambios quedan registrados en la auditoría.</p>
-            {[["name", "Nombre"], ["city", "Ciudad"], ["neighborhood", "Barrio"], ["address", "Dirección"], ["sports", "Deportes separados por comas"], ["website", "Sitio web"], ["imageUrl", "Foto HTTPS"]].map(([key, label]) => <label key={key}>{label}<input value={editing[key] || ""} onChange={(event) => setEditing({ ...editing, [key]: event.target.value })} /></label>)}
+            {[["name", "Nombre"], ["city", "Ciudad"], ["neighborhood", "Barrio"], ["address", "Dirección pública"], ["latitude", "Latitud pública"], ["longitude", "Longitud pública"], ["sport", "Deporte principal"], ["sports", "Deportes separados por comas"], ["headline", "Frase principal"], ["email", "Email público"], ["phone", "Teléfono / WhatsApp público"], ["website", "Sitio web"], ["imageUrl", "Foto HTTPS"]].map(([key, label]) => <label key={key}>{label}<input value={editing[key] ?? ""} onChange={(event) => setEditing({ ...editing, [key]: event.target.value })} /></label>)}
+            <label>Descripción pública<textarea value={editing.description || ""} onChange={(event) => setEditing({ ...editing, description: event.target.value })} rows={3} /></label>
             <div className="admin-edit-details">
               <h3>Datos específicos</h3>
               {(roleFields[editing.category] || []).filter((field) => fieldIsVisible(field, editing.details || {})).map((field) => <FormField key={field.name} field={field} value={editing.details?.[field.name]} onChange={(value) => setEditing({ ...editing, details: { ...(editing.details || {}), [field.name]: value } })} />)}
@@ -3393,7 +3468,7 @@ function LegalPage({ type, onNavigate }) {
 
 export default function App() {
   const routeFromHash = () =>
-    (window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/")) ? "admin" : window.location.pathname === "/terminos" ? "terms" : window.location.pathname === "/privacidad" ? "privacy" : window.location.pathname.startsWith("/clubes/") ? "club" : window.location.pathname === "/clubes" ? "clubs" : window.location.pathname === "/deportes" ? "sports" : window.location.pathname.startsWith("/novedades/") ? "article" : window.location.pathname === "/novedades" ? "news" : ({
+    (window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/")) ? "admin" : window.location.pathname === "/terminos" ? "terms" : window.location.pathname === "/privacidad" ? "privacy" : window.location.pathname.startsWith("/clubes/") ? "club" : window.location.pathname.startsWith("/perfiles/") ? "publicProfile" : window.location.pathname === "/clubes" ? "clubs" : window.location.pathname === "/deportes" ? "sports" : window.location.pathname.startsWith("/novedades/") ? "article" : window.location.pathname === "/novedades" ? "news" : ({
       "#explorar": "explore",
       "#mi-espacio": "profile",
     })[window.location.hash] || "home";
@@ -3411,9 +3486,9 @@ export default function App() {
   const [articles, setArticles] = useState([]);
   const [newsLoading, setNewsLoading] = useState(true);
   const [newsError, setNewsError] = useState("");
-  const [clubProfile, setClubProfile] = useState(null);
-  const [clubLoading, setClubLoading] = useState(false);
-  const [clubError, setClubError] = useState("");
+  const [publicProfileData, setPublicProfileData] = useState(null);
+  const [publicProfileLoading, setPublicProfileLoading] = useState(false);
+  const [publicProfileError, setPublicProfileError] = useState("");
 
   useEffect(() => {
     api("/me")
@@ -3462,16 +3537,16 @@ export default function App() {
     api("/news").then((data) => { setArticles(data.articles); setNewsError(""); }).catch((issue) => setNewsError(issue.message)).finally(() => setNewsLoading(false));
   }, [view]);
   useEffect(() => {
-    if (view !== "club") return;
+    if (!["club", "publicProfile"].includes(view)) return;
     const id = decodeURIComponent(window.location.pathname.split("/")[2] || "");
-    setClubLoading(true);
-    setClubError("");
-    setClubProfile(null);
+    setPublicProfileLoading(true);
+    setPublicProfileError("");
+    setPublicProfileData(null);
     let cancelled = false;
     api(`/profiles/${id}`)
-      .then((data) => { if (!cancelled) setClubProfile(data.profile); })
-      .catch((issue) => { if (!cancelled) setClubError(issue.message); })
-      .finally(() => { if (!cancelled) setClubLoading(false); });
+      .then((data) => { if (!cancelled) setPublicProfileData(data.profile); })
+      .catch((issue) => { if (!cancelled) setPublicProfileError(issue.message); })
+      .finally(() => { if (!cancelled) setPublicProfileLoading(false); });
     return () => { cancelled = true; };
   }, [view]);
   useEffect(() => {
@@ -3490,7 +3565,7 @@ export default function App() {
       explore: "explorar",
       profile: "mi-espacio",
     };
-    window.history.pushState(null, "", next === "admin" ? "/admin" : next === "terms" ? "/terminos" : next === "privacy" ? "/privacidad" : next === "clubs" ? "/clubes" : next === "sports" ? "/deportes" : next === "news" ? "/novedades" : next === "article" ? `/novedades/${encodeURIComponent(anchor)}` : next === "club" ? `/clubes/${encodeURIComponent(anchor)}` : next === "home" ? "/" : `/#${hashes[next]}`);
+    window.history.pushState(null, "", next === "admin" ? "/admin" : next === "terms" ? "/terminos" : next === "privacy" ? "/privacidad" : next === "clubs" ? "/clubes" : next === "sports" ? "/deportes" : next === "news" ? "/novedades" : next === "article" ? `/novedades/${encodeURIComponent(anchor)}` : next === "club" ? `/clubes/${encodeURIComponent(anchor)}` : next === "publicProfile" ? `/perfiles/${encodeURIComponent(anchor)}` : next === "home" ? "/" : `/#${hashes[next]}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (anchor && next === "home")
       window.setTimeout(
@@ -3533,7 +3608,8 @@ export default function App() {
       )}
       {view === "news" && <NewsPage articles={articles} loading={newsLoading} error={newsError} onNavigate={navigate} />}
       {view === "article" && <NewsArticle article={articles.find((item) => item.slug === decodeURIComponent(window.location.pathname.split("/")[2] || ""))} loading={newsLoading} onNavigate={navigate} />}
-      {view === "club" && <ClubProfilePage profile={clubProfile} loading={clubLoading} error={clubError} onNavigate={navigate} />}
+      {view === "club" && <ClubProfilePage profile={publicProfileData} loading={publicProfileLoading} error={publicProfileError} onNavigate={navigate} />}
+      {view === "publicProfile" && <PublicProfilePage profile={publicProfileData} loading={publicProfileLoading} error={publicProfileError} onNavigate={navigate} />}
       {view === "clubs" && <ClubsPage profiles={browseProfiles} loading={browseLoading} error={browseError} onOpen={setSelectedProfile} onNavigate={navigate} />}
       {view === "sports" && <SportsPage profiles={browseProfiles} loading={browseLoading} error={browseError} onOpen={setSelectedProfile} onNavigate={navigate} />}
       {view === "terms" && <LegalPage type="terms" onNavigate={navigate} />}

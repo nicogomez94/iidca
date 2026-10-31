@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fieldIsVisible, hasValue, requiredMissing } from "./profileFields.js";
+import { fieldIsVisible, hasValue, publicRoleFields, requiredMissing } from "./profileFields.js";
 
 test("la edad del deportista es opcional y los arreglos cuentan para la completitud", () => {
   const details = {
@@ -36,4 +36,17 @@ test("la cláusula del sponsor es obligatoria", () => {
     sponsorTermsAccepted: false,
   });
   assert.equal(missing.some((field) => field.name === "sponsorTermsAccepted"), true);
+});
+
+test("los datos internos no aparecen en los detalles públicos", () => {
+  const professional = publicRoleFields("PROFESSIONAL").map((field) => field.name);
+  const club = publicRoleFields("CLUB").map((field) => field.name);
+  const sponsor = publicRoleFields("SPONSOR").map((field) => field.name);
+  assert.equal(professional.includes("workArea"), true);
+  assert.equal(club.includes("legalId"), false);
+  assert.equal(club.includes("contactPerson"), false);
+  assert.equal(sponsor.includes("contributionAmount"), false);
+  assert.equal(sponsor.includes("contactName"), false);
+  assert.equal(sponsor.includes("corporateEmail"), true);
+  assert.equal(sponsor.includes("contactPhone"), true);
 });

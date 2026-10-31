@@ -210,6 +210,8 @@ function validateRoleDetails(role, details, { requireAll = false } = {}) {
     const value = details[field.name];
     if (field.type === "email" && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value)))
       throw validationError(`${field.label}: ingresá un email válido.`);
+    if (field.type === "tel" && value && !/^\+?[\d\s().-]{8,25}$/.test(String(value)))
+      throw validationError(`${field.label}: ingresá un teléfono válido.`);
     if (field.type === "url" && value && !/^https?:\/\/[^\s]+$/i.test(String(value)))
       throw validationError(`${field.label}: ingresá una dirección web válida.`);
     if (field.type === "number" && value !== "" && value != null) {
@@ -307,6 +309,8 @@ function normalizeProfile(input, role, options = {}) {
     )
       throw validationError("Longitud inválida.");
   }
+  if (options.requireAll && (data.latitude != null) !== (data.longitude != null))
+    throw validationError("Completá ambas coordenadas o quitá la ubicación del mapa.");
   if (Object.hasOwn(data, "details")) {
     if (
       !data.details ||
@@ -330,6 +334,8 @@ function normalizeProfile(input, role, options = {}) {
   }
   if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email))
     throw validationError("Ingresá un email público válido.");
+  if (data.phone && !/^\+?[\d\s().-]{8,25}$/.test(data.phone))
+    throw validationError("Ingresá un teléfono público válido.");
   if (data.website && !/^https?:\/\/[^\s]+$/i.test(data.website))
     throw validationError("Ingresá un sitio web válido, incluyendo http:// o https://.");
   if (role === "FEDERATION" && data.description && data.description.length > 500)
@@ -1091,32 +1097,56 @@ app.post("/api/admin/import/:step", auth, adminOnly, importLimiter, importBody, 
 });
 
 function newsInput(input) {
+  if (input.sourceType && !["IIDCA", "CLUB"].includes(input.sourceType))
+    throw validationError("Elegí una fuente válida para la noticia.");
+  const sourceType = input.sourceType === "CLUB" ? "CLUB" : "IIDCA";
   const article = {
     title: cleanText(input.title, 140),
     excerpt: cleanText(input.excerpt, 320),
-    body: cleanText(input.body, 8000),
-    category: cleanText(input.category, 55),
+    body: cleanText(input.body, 8000) || cleanText(input.excerpt, 320),
+    category: cleanText(input.category, 55) || (sourceType === "IIDCA" ? "ACTUALIDAD IIDCA" : "VIDA DE CLUBES"),
     imageUrl: cleanText(input.imageUrl, 500),
-    imageAlt: cleanText(input.imageAlt, 180),
+    imageAlt: cleanText(input.imageAlt, 180) || cleanText(input.title, 140),
+    sourceType,
+    clubId: sourceType === "CLUB" ? cleanText(input.clubId, 100) || null : null,
+    externalUrl: cleanText(input.externalUrl, 1000) || null,
     published: input.published === true,
   };
-  if (!article.title || !article.excerpt || !article.body || !article.category || !article.imageUrl || !article.imageAlt)
-    throw validationError("Completá todos los campos de la noticia.");
+  if (!article.title || !article.excerpt || !article.imageUrl)
+    throw validationError("Completá título, descripción e imagen de la noticia.");
+  if (sourceType === "CLUB" && !article.clubId)
+    throw validationError("Elegí el club de esta noticia.");
   if (!/^https:\/\/[^\s]+$/i.test(article.imageUrl) && !/^\/images\/[\w./-]+$/.test(article.imageUrl))
     throw validationError("La foto debe ser una URL HTTPS o una imagen del sitio.");
+  if (article.externalUrl) {
+    try {
+      const url = new URL(article.externalUrl);
+      if (!["http:", "https:"].includes(url.protocol)) throw new Error("protocol");
+    } catch {
+      throw validationError("El enlace externo debe ser una URL HTTP o HTTPS válida.");
+    }
+  }
   return article;
 }
 
+async function validateNewsClub(data) {
+  if (data.sourceType !== "CLUB") return;
+  const club = await prisma.profile.findFirst({ where: { id: data.clubId, category: "CLUB", status: "PUBLISHED" }, select: { id: true } });
+  if (!club) throw validationError("El club seleccionado debe estar publicado.");
+}
+
+const newsInclude = { club: { select: { id: true, name: true } } };
+
 app.get("/api/news", async (_req, res, next) => {
   try {
-    const articles = await prisma.newsArticle.findMany({ where: { published: true }, orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }] });
+    const articles = await prisma.newsArticle.findMany({ where: { published: true }, include: newsInclude, orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }] });
     res.json({ articles });
   } catch (error) { next(error); }
 });
 
 app.get("/api/news/:slug", async (req, res, next) => {
   try {
-    const article = await prisma.newsArticle.findUnique({ where: { slug: req.params.slug } });
+    const article = await prisma.newsArticle.findUnique({ where: { slug: req.params.slug }, include: newsInclude });
     if (!article?.published) return res.status(404).json({ error: "Noticia no encontrada." });
     res.json({ article });
   } catch (error) { next(error); }
@@ -1124,7 +1154,7 @@ app.get("/api/news/:slug", async (req, res, next) => {
 
 app.get("/api/admin/news", auth, adminOnly, async (_req, res, next) => {
   try {
-    const articles = await prisma.newsArticle.findMany({ orderBy: { createdAt: "desc" } });
+    const articles = await prisma.newsArticle.findMany({ include: newsInclude, orderBy: { createdAt: "desc" } });
     res.json({ articles });
   } catch (error) { next(error); }
 });
@@ -1132,8 +1162,9 @@ app.get("/api/admin/news", auth, adminOnly, async (_req, res, next) => {
 app.post("/api/admin/news", auth, adminOnly, async (req, res, next) => {
   try {
     const data = newsInput(req.body);
+    await validateNewsClub(data);
     const slugBase = data.title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 75) || "noticia";
-    const article = await prisma.newsArticle.create({ data: { ...data, slug: `${slugBase}-${crypto.randomBytes(3).toString("hex")}`, publishedAt: data.published ? new Date() : null } });
+    const article = await prisma.newsArticle.create({ data: { ...data, slug: `${slugBase}-${crypto.randomBytes(3).toString("hex")}`, publishedAt: data.published ? new Date() : null }, include: newsInclude });
     await audit(req.user.id, "NEWS_CREATED", article.id, { title: article.title });
     res.status(201).json({ article });
   } catch (error) { next(error); }
@@ -1144,7 +1175,8 @@ app.patch("/api/admin/news/:id", auth, adminOnly, async (req, res, next) => {
     const existing = await prisma.newsArticle.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: "Noticia no encontrada." });
     const data = newsInput(req.body);
-    const article = await prisma.newsArticle.update({ where: { id: existing.id }, data: { ...data, publishedAt: data.published ? existing.publishedAt || new Date() : null } });
+    await validateNewsClub(data);
+    const article = await prisma.newsArticle.update({ where: { id: existing.id }, data: { ...data, publishedAt: data.published ? existing.publishedAt || new Date() : null }, include: newsInclude });
     await audit(req.user.id, "NEWS_UPDATED", article.id, { published: article.published });
     res.json({ article });
   } catch (error) { next(error); }
