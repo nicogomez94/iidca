@@ -49,6 +49,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "./api.js";
+import LeafletMap from "./LeafletMap.jsx";
 import {
   categories,
   roleDescriptions,
@@ -64,6 +65,22 @@ import { fieldIsVisible, hasValue, publicRoleFields, requiredMissing, roleDocume
 
 const logo = "/logo-iidca.png";
 const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+let googleMapsUnavailable = false;
+const mapFailureListeners = new Set();
+function markGoogleMapsUnavailable() {
+  googleMapsUnavailable = true;
+  mapFailureListeners.forEach((notify) => notify(true));
+}
+if (typeof window !== "undefined") window.gm_authFailure = markGoogleMapsUnavailable;
+function useGoogleMapsUnavailable() {
+  const [unavailable, setUnavailable] = useState(googleMapsUnavailable);
+  useEffect(() => {
+    mapFailureListeners.add(setUnavailable);
+    if (googleMapsUnavailable) setUnavailable(true);
+    return () => mapFailureListeners.delete(setUnavailable);
+  }, []);
+  return unavailable;
+}
 const defaultFilters = {
   sport: "",
   location: "",
@@ -1109,6 +1126,8 @@ const mapPin = (category, active) => `data:image/svg+xml,${encodeURIComponent(`
 
 function DirectoryMap({ profiles, filters, onRadiusChange }) {
   const [focused, setFocused] = useState(null);
+  const googleMapsFailed = useGoogleMapsUnavailable();
+  const useGoogleMaps = Boolean(googleMapsKey && !googleMapsFailed);
   const [mapSearch, setMapSearch] = useState("");
   const [selectedType, setSelectedType] = useState("both");
   const [selectedSport, setSelectedSport] = useState("");
@@ -1132,12 +1151,6 @@ function DirectoryMap({ profiles, filters, onRadiusChange }) {
     setSelectedArea("");
     setFocused(null);
   };
-  const embedQuery = selected
-    ? `${selected.latitude},${selected.longitude}`
-    : filters.lat && filters.lng
-      ? `${filters.lat},${filters.lng}`
-      : `${mapSearch || selectedSport || "deporte"} ${selectedArea || filters.location || "Ciudad de Buenos Aires"}`;
-  const embedZoom = selected ? 17 : 14;
   return (
     <div className="map-frame" aria-label="Mapa y filtros de entidades deportivas">
       <div className="map-topbar">
@@ -1146,8 +1159,8 @@ function DirectoryMap({ profiles, filters, onRadiusChange }) {
       </div>
       <div className="map-layout">
         <div className="map-canvas">
-          {googleMapsKey ? (
-            <APIProvider apiKey={googleMapsKey} language="es" region="AR">
+          {useGoogleMaps ? (
+            <APIProvider apiKey={googleMapsKey} language="es" region="AR" onError={markGoogleMapsUnavailable}>
               <GoogleMap defaultCenter={{ lat: -34.6037, lng: -58.3816 }} defaultZoom={11} gestureHandling="cooperative" className="directory-map" mapTypeControl={false} streetViewControl={false} zoomControl={false} fullscreenControl>
                 <DirectoryZoomControls />
                 <FitGoogleMap profiles={visiblePoints} location={filters} focusId={selected?.id} />
@@ -1159,10 +1172,8 @@ function DirectoryMap({ profiles, filters, onRadiusChange }) {
                 {selected && <SelectedMapCard profile={selected} onClose={() => setFocused(null)} />}
               </GoogleMap>
             </APIProvider>
-          ) : (
-            <iframe className="directory-map" title="Google Maps: entidades deportivas" src={`https://maps.google.com/maps?q=${encodeURIComponent(embedQuery)}&z=${embedZoom}&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
-          )}
-          {!googleMapsKey && selected && (
+          ) : <LeafletMap points={visiblePoints} selected={selected} location={filters} onSelect={setFocused} />}
+          {!useGoogleMaps && selected && (
             <div className="map-marker-card-anchor map-marker-card-fallback">
               <div className="map-marker-card">
                 <img src={selected.imageUrl || "/images/sports/running.jpg"} alt="" />
@@ -1216,8 +1227,8 @@ function DirectoryMap({ profiles, filters, onRadiusChange }) {
         </aside>
       </div>
       <div className="map-caption">
-        <MapPin size={17} /> {googleMapsKey ? "Los marcadores muestran todos los resultados filtrados." : "Elegí una opción del listado para ubicarla en Google Maps."}{" "}
-        <span>Mapa: Google Maps</span>
+        <MapPin size={17} /> Los marcadores muestran todos los resultados filtrados.{" "}
+        <span>Mapa: {useGoogleMaps ? "Google Maps" : "OpenStreetMap"}</span>
       </div>
     </div>
   );
@@ -1225,6 +1236,7 @@ function DirectoryMap({ profiles, filters, onRadiusChange }) {
 
 function LocationPicker({ latitude, longitude, onChoose, professional = false }) {
   const center = latitude && longitude ? { lat: Number(latitude), lng: Number(longitude) } : { lat: -34.6037, lng: -58.3816 };
+  const googleMapsFailed = useGoogleMapsUnavailable();
   return (
     <div className="location-picker">
       <div>
@@ -1235,16 +1247,16 @@ function LocationPicker({ latitude, longitude, onChoose, professional = false })
             : "Opcional. Elegí una ubicación para aparecer en las búsquedas cercanas."}
         </span>
       </div>
-      {googleMapsKey ? (
-        <APIProvider apiKey={googleMapsKey} language="es" region="AR">
+      {googleMapsKey && !googleMapsFailed ? (
+        <APIProvider apiKey={googleMapsKey} language="es" region="AR" onError={markGoogleMapsUnavailable}>
           <GoogleMap center={center} zoom={latitude && longitude ? 14 : 11} gestureHandling="cooperative" className="picker-map" onClick={(event) => event.detail.latLng && onChoose(event.detail.latLng)}>
             {latitude && longitude && <Marker position={center} />}
           </GoogleMap>
         </APIProvider>
       ) : (
         <>
-          <iframe className="picker-map" title="Google Maps para ubicar tu espacio" src={`https://maps.google.com/maps?q=${latitude && longitude ? `${latitude},${longitude}` : "Ciudad de Buenos Aires"}&z=12&output=embed`} loading="lazy" />
-          <p className="map-coordinate-help">Abrí <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer">Google Maps</a>, elegí tu sede y copiá las coordenadas.</p>
+          <LeafletMap picker latitude={latitude} longitude={longitude} onChoose={onChoose} />
+          <p className="map-coordinate-help">Tocá el mapa para marcar el punto público o escribí las coordenadas.</p>
           <div className="coordinate-fields">
             <label>Latitud <input type="number" step="any" value={latitude ?? ""} onChange={(event) => onChoose({ lat: event.target.value, lng: longitude ?? "" })} /></label>
             <label>Longitud <input type="number" step="any" value={longitude ?? ""} onChange={(event) => onChoose({ lat: latitude ?? "", lng: event.target.value })} /></label>
@@ -3095,8 +3107,64 @@ function AdminImport({ onImported }) {
   );
 }
 
+const auditActionLabels = {
+  PROFILE_EDIT: "Perfil actualizado",
+  PROFILE_ADMIN_EDIT: "Ficha editada por administración",
+  PROFILE_STATUS: "Estado de ficha cambiado",
+  PROFILE_PHOTO_ADDED: "Foto agregada",
+  PROFILE_PHOTO_COVER: "Portada cambiada",
+  PROFILE_PHOTO_DELETED: "Foto eliminada",
+  PROFILE_DOCUMENT_ADDED: "Documento agregado",
+  PROFILE_DOCUMENT_DELETED: "Documento eliminado",
+  CLUB_FACILITY_CREATED: "Instalación agregada",
+  CLUB_FACILITY_RENAMED: "Instalación renombrada",
+  CLUB_FACILITY_DELETED: "Instalación eliminada",
+  CLUB_FACILITY_PHOTO_ADDED: "Foto de instalación agregada",
+  CLUB_FACILITY_PHOTO_DELETED: "Foto de instalación eliminada",
+  CLAIM_SUBMITTED: "Reclamo de ficha enviado",
+  CLAIM_APPROVED: "Reclamo aprobado",
+  CLAIM_REJECTED: "Reclamo rechazado",
+  CLUB_VERIFICATION_APPROVED: "Verificación aprobada",
+  CLUB_VERIFICATION_REJECTED: "Verificación rechazada",
+  NEWS_CREATED: "Noticia creada",
+  NEWS_UPDATED: "Noticia actualizada",
+  NEWS_DELETED: "Noticia eliminada",
+  PROFILE_BULK_IMPORT: "Perfiles importados",
+  EXPORT_XLSX: "Padrón Excel descargado",
+  EXPORT_PDF: "Padrón PDF descargado",
+};
+
+function AdminAudit() {
+  const [page, setPage] = useState(1);
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    setError("");
+    api(`/admin/audit?page=${page}`)
+      .then((result) => { if (!cancelled) setData(result); })
+      .catch((issue) => { if (!cancelled) setError(issue.message); });
+    return () => { cancelled = true; };
+  }, [page]);
+  return <section className="dashboard-card admin-audit">
+    <div className="admin-list-heading"><h2>Bitácora de actividad</h2><span>{data?.total ?? "—"} movimientos</span></div>
+    <p>Acciones registradas de cuentas, fichas, noticias e importaciones.</p>
+    {error && <div className="feedback error" role="alert">{error}</div>}
+    {!data && !error && <p>Cargando actividad...</p>}
+    {data?.events.length === 0 && <p className="admin-empty">Todavía no hay actividad registrada.</p>}
+    {data?.events.map((event) => <article className="admin-audit-row" key={event.id}>
+      <div><strong>{auditActionLabels[event.action] || event.action.replaceAll("_", " ")}</strong>{event.target && <span>{event.target}</span>}</div>
+      <div><span>{event.actor}</span><time dateTime={event.createdAt}>{new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" }).format(new Date(event.createdAt))}</time></div>
+    </article>)}
+    {data && data.total > data.pageSize && <div className="admin-pagination">
+      <span>Página {page} de {Math.ceil(data.total / data.pageSize)}</span>
+      <div><button disabled={page === 1} onClick={() => setPage(page - 1)}>Anterior</button><button disabled={page * data.pageSize >= data.total} onClick={() => setPage(page + 1)}>Siguiente</button></div>
+    </div>}
+  </section>;
+}
+
 function Admin({ user, onAuth, onLogout, onNavigate }) {
-  const sectionFromPath = () => ({ "/admin/reclamos": "reclamos", "/admin/perfiles": "perfiles", "/admin/importador": "importador", "/admin/novedades": "novedades" })[window.location.pathname] || "resumen";
+  const sectionFromPath = () => ({ "/admin/reclamos": "reclamos", "/admin/perfiles": "perfiles", "/admin/importador": "importador", "/admin/novedades": "novedades", "/admin/actividad": "actividad" })[window.location.pathname] || "resumen";
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
@@ -3236,6 +3304,7 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
           <button className={activeSection === "perfiles" ? "active" : ""} onClick={() => goToSection("perfiles")}><Users size={19} /> Perfiles <span>{overview?.profiles.length ?? "—"}</span></button>
           <button className={activeSection === "importador" ? "active" : ""} onClick={() => goToSection("importador")}><Upload size={19} /> Importador</button>
           <button className={activeSection === "novedades" ? "active" : ""} onClick={() => goToSection("novedades")}><Sparkles size={19} /> Noticias</button>
+          <button className={activeSection === "actividad" ? "active" : ""} onClick={() => goToSection("actividad")}><ShieldCheck size={19} /> Actividad</button>
         </nav>
         <div className="admin-sidebar-bottom">
           <div className="admin-sidebar-account"><span>{user.email?.slice(0, 1).toUpperCase() || "A"}</span><div><strong>Administración</strong><small>{user.email}</small></div></div>
@@ -3246,7 +3315,7 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
       <div className="admin-main">
         <div className="admin-topbar"><button className="admin-menu-toggle" aria-label="Abrir menú de administración" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)}><Menu size={23} /></button><span>Administración <span>/</span> IIDCA Social Club</span><span className="admin-topbar-status"><i /> Panel activo</span></div>
         <div className="admin-content">
-          <div className="admin-heading"><div><span>PANEL DE GESTIÓN</span><h1>{({ resumen: "Resumen", reclamos: "Verificaciones", perfiles: "Perfiles", importador: "Importador", novedades: "Noticias" })[activeSection]}</h1><p>{({ resumen: "Una mirada rápida a la comunidad.", reclamos: "Revisá solicitudes de verificación y vinculación de clubes.", perfiles: "Administrá las fichas y descargá el padrón con filtros.", importador: "Cargá y actualizá perfiles desde una planilla.", novedades: "Creá y publicá las historias que aparecen en el sitio." })[activeSection]}</p></div><span className="admin-heading-date">{new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long", year: "numeric" }).format(new Date())}</span></div>
+          <div className="admin-heading"><div><span>PANEL DE GESTIÓN</span><h1>{({ resumen: "Resumen", reclamos: "Verificaciones", perfiles: "Perfiles", importador: "Importador", novedades: "Noticias", actividad: "Actividad" })[activeSection]}</h1><p>{({ resumen: "Una mirada rápida a la comunidad.", reclamos: "Revisá solicitudes de verificación y vinculación de clubes.", perfiles: "Administrá las fichas y descargá el padrón con filtros.", importador: "Cargá y actualizá perfiles desde una planilla.", novedades: "Creá y publicá las historias que aparecen en el sitio.", actividad: "Consultá los cambios y movimientos registrados." })[activeSection]}</p></div><span className="admin-heading-date">{new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long", year: "numeric" }).format(new Date())}</span></div>
         {error && (
           <div className="feedback error" role="alert">
             {error}
@@ -3259,7 +3328,7 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
             <Users size={25} />
           </div>
           <div>
-            <span>Pendientes de revisión</span>
+            <span>Perfiles pendientes</span>
             <strong>{pending}</strong>
             <CircleHelp size={25} />
           </div>
@@ -3369,6 +3438,7 @@ function Admin({ user, onAuth, onLogout, onNavigate }) {
         </section>}
         {activeSection === "novedades" && <AdminNews clubs={(overview?.profiles || []).filter((profile) => profile.category === "CLUB" && profile.status === "PUBLISHED").sort((a, b) => a.name.localeCompare(b.name, "es"))} />}
         {activeSection === "importador" && <AdminImport onImported={load} />}
+        {activeSection === "actividad" && <AdminAudit />}
         {editing && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setEditing(null)}>
           <form className="admin-edit-modal" onSubmit={saveEdit} role="dialog" aria-modal="true" aria-label={`Editar ${editing.name}`}>
             <button type="button" className="modal-close" onClick={() => setEditing(null)} aria-label="Cerrar"><X /></button>

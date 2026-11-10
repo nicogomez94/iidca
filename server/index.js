@@ -1009,6 +1009,42 @@ app.get("/api/admin/overview", auth, adminOnly, async (_req, res, next) => {
   }
 });
 
+app.get("/api/admin/audit", auth, adminOnly, async (req, res, next) => {
+  try {
+    const page = Math.max(1, Math.min(10000, Number.parseInt(req.query.page, 10) || 1));
+    const pageSize = 20;
+    const [total, events] = await Promise.all([
+      prisma.auditEvent.count(),
+      prisma.auditEvent.findMany({
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { actor: { select: { email: true } } },
+      }),
+    ]);
+    const profileIds = [...new Set(events.map((event) => event.targetId).filter(Boolean))];
+    const profiles = profileIds.length
+      ? await prisma.profile.findMany({ where: { id: { in: profileIds } }, select: { id: true, name: true } })
+      : [];
+    const names = new Map(profiles.map((profile) => [profile.id, profile.name]));
+    res.json({
+      total,
+      page,
+      pageSize,
+      events: events.map((event) => ({
+        id: event.id,
+        action: event.action,
+        actor: event.actor?.email || "Sistema",
+        target: names.get(event.targetId) || event.detail?.title || null,
+        detail: event.detail,
+        createdAt: event.createdAt,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 async function prepareProfileImport(buffer, filename) {
   const parsed = await parseImportFile(buffer, filename);
   const rows = parsed.map(validateImportRow);

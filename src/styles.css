@@ -4409,6 +4409,36 @@ em {
   border: 0;
 }
 
+.iidca-leaflet-pin {
+  background: transparent;
+}
+
+.iidca-leaflet-pin span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 3px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  box-shadow: 0 3px 8px #080d4a55;
+  color: #fff;
+  font: 800 14px/1 "Outfit", sans-serif;
+  transform: rotate(-45deg);
+}
+
+.iidca-leaflet-pin b {
+  font-weight: 800;
+  transform: rotate(45deg);
+}
+
+.leaflet-container {
+  font-family: "DM Sans", sans-serif;
+}
+
+.map-canvas .leaflet-control-attribution {
+  font-size: 10px;
+}
+
 .map-zoom-controls {
   display: flex;
   flex-direction: column;
@@ -4442,7 +4472,7 @@ em {
 .map-marker-card-fallback {
   top: calc(50% + 12px);
   left: 50%;
-  z-index: 2;
+  z-index: 1001;
 }
 
 .map-marker-card {
@@ -5178,6 +5208,57 @@ em {
 .admin-overview-links button strong { font-family: "Outfit", sans-serif; font-size: 18px; }
 .admin-overview-links button span { grid-column: 2; color: #747d94; font-size: 12px; }
 .admin-overview-links button > svg:last-child { grid-column: 3; grid-row: 1 / span 2; }
+
+.admin-audit {
+  margin-top: 23px;
+}
+
+.admin-audit > p {
+  margin: 0 0 18px;
+  color: #747d94;
+  font-size: 13px;
+}
+
+.admin-audit-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 0;
+  border-top: 1px solid #e9ebf2;
+}
+
+.admin-audit-row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-audit-row > div:last-child {
+  text-align: right;
+}
+
+.admin-audit-row strong {
+  color: var(--navy);
+  font-size: 13px;
+}
+
+.admin-audit-row span,
+.admin-audit-row time {
+  overflow-wrap: anywhere;
+  color: #747d94;
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .admin-audit-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .admin-audit-row > div:last-child {
+    text-align: left;
+  }
+}
 .admin-content .admin-export-panel { margin-top: 23px; padding: 24px; }
 .admin-export-head h2 { margin: 0 0 4px; color: var(--navy); font-family: "Outfit", sans-serif; font-size: 23px; }
 .admin-export-head p { margin: 0; color: var(--muted); font-size: 13px; }
