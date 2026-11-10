@@ -81,6 +81,18 @@ function useGoogleMapsUnavailable() {
   }, []);
   return unavailable;
 }
+function useGoogleMapsErrorDetector(container, enabled) {
+  useEffect(() => {
+    if (!enabled || !container.current) return;
+    const check = () => {
+      if (container.current?.querySelector(".dismissButton")) markGoogleMapsUnavailable();
+    };
+    const observer = new MutationObserver(check);
+    observer.observe(container.current, { childList: true, subtree: true });
+    check();
+    return () => observer.disconnect();
+  }, [container, enabled]);
+}
 const defaultFilters = {
   sport: "",
   location: "",
@@ -1126,8 +1138,10 @@ const mapPin = (category, active) => `data:image/svg+xml,${encodeURIComponent(`
 
 function DirectoryMap({ profiles, filters, onRadiusChange }) {
   const [focused, setFocused] = useState(null);
+  const mapCanvas = useRef(null);
   const googleMapsFailed = useGoogleMapsUnavailable();
   const useGoogleMaps = Boolean(googleMapsKey && !googleMapsFailed);
+  useGoogleMapsErrorDetector(mapCanvas, useGoogleMaps);
   const [mapSearch, setMapSearch] = useState("");
   const [selectedType, setSelectedType] = useState("both");
   const [selectedSport, setSelectedSport] = useState("");
@@ -1158,7 +1172,7 @@ function DirectoryMap({ profiles, filters, onRadiusChange }) {
         <span className="map-total"><MapPin size={16} /> {visiblePoints.length} ubicaciones</span>
       </div>
       <div className="map-layout">
-        <div className="map-canvas">
+        <div className="map-canvas" ref={mapCanvas}>
           {useGoogleMaps ? (
             <APIProvider apiKey={googleMapsKey} language="es" region="AR" onError={markGoogleMapsUnavailable}>
               <GoogleMap defaultCenter={{ lat: -34.6037, lng: -58.3816 }} defaultZoom={11} gestureHandling="cooperative" className="directory-map" mapTypeControl={false} streetViewControl={false} zoomControl={false} fullscreenControl>
@@ -1236,9 +1250,11 @@ function DirectoryMap({ profiles, filters, onRadiusChange }) {
 
 function LocationPicker({ latitude, longitude, onChoose, professional = false }) {
   const center = latitude && longitude ? { lat: Number(latitude), lng: Number(longitude) } : { lat: -34.6037, lng: -58.3816 };
+  const pickerContainer = useRef(null);
   const googleMapsFailed = useGoogleMapsUnavailable();
+  useGoogleMapsErrorDetector(pickerContainer, Boolean(googleMapsKey && !googleMapsFailed));
   return (
-    <div className="location-picker">
+    <div className="location-picker" ref={pickerContainer}>
       <div>
         <strong>{professional ? "Elegí un punto público de atención" : "Ubicá tu espacio en el mapa"}</strong>
         <span>
