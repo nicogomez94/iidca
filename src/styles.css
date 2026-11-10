@@ -3870,6 +3870,11 @@ em {
   background: #fff;
 }
 
+.admin-edit-modal .modal-close {
+  justify-self: end;
+  margin: 0 0 -48px;
+}
+
 @media (max-width: 860px) {
   .google-map-with-list {
     grid-template-columns: 1fr;
