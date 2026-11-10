@@ -1158,6 +1158,12 @@ function DirectoryMap({ profiles, filters, onRadiusChange }) {
       && (!selectedSport || (profile.sports || []).some((sport) => normalizeMapText(sport).includes(normalizeMapText(selectedSport))));
   }), [points, mapSearch, selectedType, selectedArea, selectedSport]);
   const selected = visiblePoints.find((profile) => profile.id === focused?.id) || null;
+  const selectFromList = (profile) => {
+    setFocused(profile);
+    if (window.matchMedia("(max-width: 860px)").matches) {
+      window.setTimeout(() => mapCanvas.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+    }
+  };
   const clearMapFilters = () => {
     setMapSearch("");
     setSelectedType("both");
@@ -1231,7 +1237,7 @@ function DirectoryMap({ profiles, filters, onRadiusChange }) {
           <div className="map-results">
             {visiblePoints.length === 0 && <div className="map-no-results"><Compass size={27} /><strong>No encontramos ubicaciones con esos filtros.</strong><button onClick={clearMapFilters}>Limpiar filtros del mapa</button></div>}
             {visiblePoints.map((profile) => (
-              <button key={profile.id} className={`map-result ${selected?.id === profile.id ? "selected" : ""}`} onClick={() => setFocused(profile)} aria-pressed={selected?.id === profile.id}>
+              <button key={profile.id} className={`map-result ${selected?.id === profile.id ? "selected" : ""}`} onClick={() => selectFromList(profile)} aria-pressed={selected?.id === profile.id}>
                 <img src={profile.imageUrl || "/images/sports/running.jpg"} alt="" loading="lazy" />
                 <span><strong>{profile.name}</strong><small><MapPin size={13} />{profile.details?.workArea || profile.neighborhood || profile.city}{profile.distanceKm !== null && profile.distanceKm !== undefined ? ` · ${profile.distanceKm} km` : ""}</small><em>{categoryLabel(profile.category)} · {profile.sports?.slice(0, 2).join(" · ") || "Actividad deportiva"}</em></span>
                 <ArrowUpRight size={17} />
